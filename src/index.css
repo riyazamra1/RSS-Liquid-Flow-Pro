@@ -1,0 +1,594 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-display: 'Fredoka', system-ui, -apple-system, sans-serif;
+    --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --bg-canvas: #FAF6EC;
+    --bg-surface: #FFFDF8;
+    --bg-sand: #F3EAD6;
+    --ink-primary: #2D2218;
+    --ink-secondary: #6E5B47;
+    --accent-coral: #E55A3C;
+    --accent-amber: #E8A317;
+    --accent-emerald: #2E8555;
+    --accent-rose: #D93D59;
+  }
+
+  html,
+  body {
+    font-family: var(--font-body);
+    background-color: var(--bg-canvas);
+    color: var(--ink-primary);
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+/* Tactile 3D casual game button bevels (zero blue) */
+.btn-tactile-coral {
+  background: linear-gradient(180deg, #F58442 0%, #E55A3C 100%);
+  box-shadow: 0 5px 0 #B33B22, 0 10px 20px -4px rgba(179, 59, 34, 0.32);
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-tactile-coral:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 0 #B33B22, 0 14px 24px -4px rgba(179, 59, 34, 0.36);
+}
+.btn-tactile-coral:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #B33B22, 0 4px 10px -2px rgba(179, 59, 34, 0.25);
+}
+
+.btn-tactile-gold {
+  background: linear-gradient(180deg, #FAC94D 0%, #E59B14 100%);
+  box-shadow: 0 4px 0 #AD6F08, 0 8px 16px -4px rgba(173, 111, 8, 0.28);
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-tactile-gold:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 0 #AD6F08, 0 12px 20px -4px rgba(173, 111, 8, 0.32);
+}
+.btn-tactile-gold:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #AD6F08, 0 4px 8px -2px rgba(173, 111, 8, 0.24);
+}
+
+.btn-tactile-emerald {
+  background: linear-gradient(180deg, #48AF75 0%, #2D8A56 100%);
+  box-shadow: 0 4px 0 #1E633D, 0 8px 16px -4px rgba(30, 99, 61, 0.28);
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-tactile-emerald:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.btn-tactile-emerald:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #1E633D, 0 4px 8px -2px rgba(30, 99, 61, 0.22);
+}
+
+/* Tactile ceramic level nodes */
+.node-complete {
+  background: radial-gradient(circle at 32% 28%, #63C68B 0%, #31945D 65%, #237447 100%);
+  box-shadow: 0 5px 0 #1A5936, 0 10px 18px -4px rgba(26, 89, 54, 0.32), inset 0 2px 3px rgba(255, 255, 255, 0.45);
+}
+
+.node-milestone-complete {
+  background: radial-gradient(circle at 32% 28%, #FFE07D 0%, #EAA118 65%, #C97D0C 100%);
+  box-shadow: 0 5px 0 #945B06, 0 10px 20px -4px rgba(148, 91, 6, 0.36), inset 0 2px 4px rgba(255, 255, 255, 0.55);
+}
+
+.node-current {
+  background: radial-gradient(circle at 30% 25%, #FFA15C 0%, #E85A38 62%, #C93E22 100%);
+  box-shadow: 0 6px 0 #9B2C16, 0 14px 26px -4px rgba(201, 62, 34, 0.42), inset 0 2px 4px rgba(255, 255, 255, 0.5);
+}
+
+.node-locked {
+  background: radial-gradient(circle at 35% 30%, #F2ECE0 0%, #E0D6C3 70%, #CFC3AC 100%);
+  box-shadow: 0 4px 0 #B7A88E, 0 6px 12px -4px rgba(110, 91, 71, 0.2), inset 0 1px 2px rgba(255, 255, 255, 0.65);
+}
+
+@keyframes beacon-ring {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.72;
+  }
+  70% {
+    transform: scale(1.38);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.38);
+    opacity: 0;
+  }
+}
+
+@keyframes float-pin {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes gentle-drift {
+  0%, 100% {
+    transform: translate(0px, 0px) rotate(0deg);
+  }
+  50% {
+    transform: translate(6px, -4px) rotate(6deg);
+  }
+}
+
+@keyframes victory-card-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes victory-star-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotate(-18deg);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.18) rotate(6deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes liquid-stream-flow {
+  0% {
+    stroke-dashoffset: 36;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes liquid-splash-left {
+  0% {
+    opacity: 0.95;
+    transform: translate(0, 0) scale(0.7);
+  }
+  60% {
+    opacity: 0.9;
+    transform: translate(-11px, -13px) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-17px, 4px) scale(0.45);
+  }
+}
+
+@keyframes liquid-splash-right {
+  0% {
+    opacity: 0.95;
+    transform: translate(0, 0) scale(0.7);
+  }
+  60% {
+    opacity: 0.9;
+    transform: translate(11px, -14px) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(17px, 4px) scale(0.45);
+  }
+}
+
+@keyframes liquid-surface-wave {
+  0%, 100% {
+    transform: scaleX(1) scaleY(1);
+  }
+  50% {
+    transform: scaleX(1.06) scaleY(1.35);
+  }
+}
+
+@keyframes liquid-rise {
+  0% {
+    transform: scaleY(0);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes liquid-drain {
+  0% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(0);
+    opacity: 0.35;
+  }
+}
+
+@keyframes bubble-rise {
+  0% {
+    transform: translateY(4px) scale(0.75);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.78;
+  }
+  80% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: translateY(-22px) scale(1.1);
+    opacity: 0;
+  }
+}
+
+@keyframes jar-complete-glow {
+  0%, 100% {
+    box-shadow: 0 14px 28px -6px rgba(232, 163, 23, 0.38), inset 0 0 16px rgba(255, 240, 170, 0.58);
+  }
+  50% {
+    box-shadow: 0 18px 36px -4px rgba(232, 163, 23, 0.58), inset 0 0 24px rgba(255, 244, 190, 0.85);
+  }
+}
+
+@keyframes cap-drop-seal {
+  0% {
+    opacity: 0;
+    transform: translateY(-22px) scale(0.86);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes jar-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px) rotate(-2deg);
+  }
+  45% {
+    transform: translateX(6px) rotate(2deg);
+  }
+  70% {
+    transform: translateX(-4px) rotate(-1deg);
+  }
+  90% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes orb-float-slow {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(24px, 16px, 0) scale(1.06);
+  }
+}
+
+@keyframes orb-float-reverse {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-26px, 18px, 0) scale(1.05);
+  }
+}
+
+@keyframes cloud-drift {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(38px, 0, 0);
+  }
+}
+
+@keyframes petal-float {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 0.25;
+  }
+  25% {
+    transform: translate3d(18px, -18px, 0) rotate(28deg);
+    opacity: 0.65;
+  }
+  50% {
+    transform: translate3d(-12px, -36px, 0) rotate(-18deg);
+    opacity: 0.55;
+  }
+  75% {
+    transform: translate3d(14px, -18px, 0) rotate(20deg);
+    opacity: 0.65;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 0.25;
+  }
+}
+
+@keyframes unlock-pop {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.6;
+  }
+  55% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Ultra-thin transparent crystal glass bottle-jar aesthetic */
+.jar-3d-shell {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.52) 0%,
+    rgba(255, 254, 250, 0.16) 18%,
+    rgba(255, 253, 248, 0.05) 52%,
+    rgba(244, 232, 208, 0.14) 84%,
+    rgba(255, 255, 255, 0.46) 100%
+  );
+  backdrop-filter: blur(2px);
+  box-shadow:
+    inset 2px 0 5px rgba(255, 255, 255, 0.92),
+    inset -2px 0 6px rgba(173, 141, 95, 0.16),
+    inset 0 -5px 9px rgba(255, 255, 255, 0.35),
+    0 14px 24px -10px rgba(110, 78, 38, 0.24);
+}
+
+.jar-3d-locked-ad {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 252, 242, 0.62) 0%,
+    rgba(245, 235, 212, 0.42) 55%,
+    rgba(232, 218, 186, 0.5) 100%
+  );
+  backdrop-filter: blur(3px);
+  box-shadow:
+    inset 2px 0 5px rgba(255, 255, 255, 0.78),
+    inset -2px 0 5px rgba(155, 125, 82, 0.16),
+    0 12px 20px -10px rgba(110, 78, 38, 0.2);
+}
+
+.jar-3d-rim {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.96) 0%,
+    rgba(252, 247, 235, 0.78) 55%,
+    rgba(222, 208, 180, 0.75) 100%
+  );
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.98),
+    0 2px 4px rgba(110, 78, 38, 0.16);
+}
+
+.jar-sealed-cap {
+  background: linear-gradient(
+    180deg,
+    #FFE793 0%,
+    #F2AD22 52%,
+    #C47D0B 100%
+  );
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.75),
+    0 4px 8px rgba(125, 76, 5, 0.35);
+}
+
+.jar-3d-complete {
+  animation: jar-complete-glow 2s ease-in-out infinite;
+}
+
+.btn-candy-cream {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FAF0DA 100%);
+  box-shadow: 0 4px 0 #D8C5A0, 0 8px 14px -6px rgba(110, 78, 38, 0.22), inset 0 2px 2px rgba(255, 255, 255, 0.95);
+  transition: transform 130ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 130ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-candy-cream:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 0 #D8C5A0, 0 10px 18px -6px rgba(110, 78, 38, 0.26), inset 0 2px 2px rgba(255, 255, 255, 0.95);
+}
+.btn-candy-cream:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #D8C5A0, 0 3px 6px -2px rgba(110, 78, 38, 0.18);
+}
+
+.animate-beacon {
+  animation: beacon-ring 2.1s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.animate-float-pin {
+  animation: float-pin 2.4s ease-in-out infinite;
+}
+
+.animate-drift {
+  animation: gentle-drift 6s ease-in-out infinite;
+}
+
+.animate-victory-card {
+  animation: victory-card-pop 150ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-victory-star {
+  animation: victory-star-pop 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-stream-flow {
+  animation: liquid-stream-flow 240ms linear infinite;
+}
+
+.animate-splash-left {
+  animation: liquid-splash-left 320ms cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.animate-splash-right {
+  animation: liquid-splash-right 320ms cubic-bezier(0.22, 1, 0.36, 1) 100ms infinite;
+}
+
+.animate-surface-wave {
+  animation: liquid-surface-wave 260ms ease-in-out infinite;
+}
+
+.animate-liquid-rise {
+  transform-origin: bottom center;
+  animation: liquid-rise 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-liquid-drain {
+  transform-origin: bottom center;
+  animation: liquid-drain 280ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-bubble-rise {
+  animation: bubble-rise 2.4s ease-in-out infinite;
+}
+
+.animate-cap-seal {
+  animation: cap-drop-seal 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-jar-shake {
+  animation: jar-shake 320ms ease-in-out;
+}
+
+.animate-orb-float-slow {
+  animation: orb-float-slow 12s ease-in-out infinite;
+}
+
+.animate-orb-float-reverse {
+  animation: orb-float-reverse 14s ease-in-out infinite;
+}
+
+.animate-cloud-drift {
+  animation: cloud-drift 18s ease-in-out infinite;
+}
+
+.animate-cloud-drift-slow {
+  animation: cloud-drift 26s ease-in-out infinite reverse;
+}
+
+.animate-petal-float {
+  animation: petal-float 12s ease-in-out infinite;
+}
+
+@keyframes svg-confetti-burst {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(0.35);
+  }
+  8% {
+    opacity: 1;
+    transform: translate3d(calc(var(--tx) * 0.25), calc(var(--ty) * 0.35), 0)
+      rotate(calc(var(--rot) * 0.25)) scale(1.1);
+  }
+  58% {
+    opacity: 1;
+    transform: translate3d(calc(var(--tx) * 0.88), calc(var(--ty) * 0.82), 0)
+      rotate(calc(var(--rot) * 0.72)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--tx), calc(var(--ty) + var(--fall)), 0)
+      rotate(var(--rot)) scale(0.65);
+  }
+}
+
+@keyframes svg-burst-ring {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.25);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.1);
+  }
+}
+
+.animate-svg-confetti {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: svg-confetti-burst var(--dur, 1150ms) cubic-bezier(0.16, 0.88, 0.32, 1)
+    var(--delay, 0ms) both;
+}
+
+.animate-svg-burst-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: svg-burst-ring 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-unlock-pop {
+  animation: unlock-pop 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-beacon,
+  .animate-float-pin,
+  .animate-drift,
+  .animate-victory-card,
+  .animate-victory-star,
+  .animate-stream-flow,
+  .animate-splash-left,
+  .animate-splash-right,
+  .animate-surface-wave,
+  .animate-liquid-rise,
+  .animate-liquid-drain,
+  .animate-bubble-rise,
+  .animate-cap-seal,
+  .animate-jar-shake,
+  .animate-orb-float-slow,
+  .animate-orb-float-reverse,
+  .animate-cloud-drift,
+  .animate-cloud-drift-slow,
+  .animate-petal-float,
+  .animate-svg-confetti,
+  .animate-svg-burst-ring,
+  .animate-unlock-pop,
+  .jar-3d-complete {
+    animation: none !important;
+  }
+}
+
+/* Custom warm scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F4ECDC;
+}
+::-webkit-scrollbar-thumb {
+  background: #D4C3A3;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #BBA57E;
+}

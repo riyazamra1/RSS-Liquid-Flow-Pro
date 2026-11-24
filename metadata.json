@@ -1,0 +1,6 @@
+{
+  "name": "RSS LIQUID FLOW",
+  "description": "Sunlit botanical level-selection dashboard and liquid sorting puzzle game with a winding progression map and daily login rewards.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
