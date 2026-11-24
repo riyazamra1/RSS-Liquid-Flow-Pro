@@ -4,6 +4,8 @@ export type DifficultyLabel = 'Easy' | 'Normal' | 'Hard' | 'Expert' | 'Master';
 
 export type GameMode = 'relaxed' | 'challenge' | 'expert' | 'master';
 
+export type AppThemeId = 'botanical' | 'midnight' | 'sunset';
+
 export interface LifeState {
   count: number;
   lastRefillAt: number;
@@ -36,6 +38,15 @@ export interface CalculatedDailyReward {
   multiplier: number;
 }
 
+export interface FriendEntry {
+  id: string;
+  name: string;
+  level: number;
+  avatarColor: string;
+  sentDates: Record<string, number>; // YYYY-MM-DD -> count sent today (max 2)
+  receivedDates: Record<string, number>; // YYYY-MM-DD -> count received today (max 2)
+}
+
 export interface PlayerProgress {
   playerName: string;
   currentLevel: number;
@@ -54,9 +65,8 @@ export interface PlayerProgress {
   dailyChallengeStreak: number;
   lastMode: GameMode;
   dailyLogin: DailyLoginRecord;
+  friends: FriendEntry[];
 }
-
-export type AppThemeId = 'sunlit' | 'sunset' | 'sakura' | 'emerald' | 'night';
 
 export interface GameSettings {
   sfx: boolean;

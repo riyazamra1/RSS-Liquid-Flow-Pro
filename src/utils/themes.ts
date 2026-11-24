@@ -4,7 +4,9 @@ export interface AppThemeConfig {
   id: AppThemeId;
   name: string;
   shortLabel: string;
+  description: string;
   isDark: boolean;
+  themeColorMeta: string;
   swatchGradient: string;
   accentHex: string;
   skyFrom: string;
@@ -26,126 +28,123 @@ export interface AppThemeConfig {
 
 export const APP_THEMES: AppThemeConfig[] = [
   {
-    id: 'sunlit',
-    name: 'Sunlit Garden',
-    shortLabel: 'Sunlit',
+    id: 'botanical',
+    name: 'Botanical',
+    shortLabel: 'Botanical',
+    description: 'Sunlit meadow & warm garden',
     isDark: false,
-    swatchGradient: 'linear-gradient(135deg, #FFE8A3 0%, #F5B841 52%, #7EB85B 100%)',
+    themeColorMeta: '#FAF6EC',
+    swatchGradient: 'linear-gradient(135deg, #FFE8A3 0%, #F5B841 52%, #5AA469 100%)',
     accentHex: '#E55A3C',
-    skyFrom: '#FFEBB6',
-    skyVia: '#FBD795',
-    skyTo: '#E9C27D',
-    orbPrimary: 'rgba(255, 217, 102, 0.82)',
+    skyFrom: '#FFF5D1',
+    skyVia: '#FBE1A8',
+    skyTo: '#E8C587',
+    orbPrimary: 'rgba(255, 217, 102, 0.85)',
     orbSecondary: 'rgba(255, 184, 128, 0.56)',
-    orbTertiary: 'rgba(154, 206, 120, 0.52)',
-    celestialFill: '#FFF6CE',
+    orbTertiary: 'rgba(130, 196, 118, 0.55)',
+    celestialFill: '#FFF8D6',
     celestialGlow: '#FFD966',
     cloudFill: '#FFFDF7',
-    hillFar: '#CAD696',
-    hillMid: '#9EC173',
-    hillNear: '#77A352',
-    archFill: '#E9D3AA',
+    hillFar: '#CAD99B',
+    hillMid: '#98BE70',
+    hillNear: '#6F9F50',
+    archFill: '#EBD5AC',
     flowerColors: ['#FFC714', '#FF5A3E'],
     particleColors: ['#F5B82E', '#F27D52', '#4FB373', '#F06A86', '#E59B14'],
   },
   {
+    id: 'midnight',
+    name: 'Midnight Ocean',
+    shortLabel: 'Midnight',
+    description: 'Deep sea & glowing tides',
+    isDark: true,
+    themeColorMeta: '#081826',
+    swatchGradient: 'linear-gradient(135deg, #071928 0%, #0E3A54 55%, #2BD4C5 100%)',
+    accentHex: '#2BD4C5',
+    skyFrom: '#061320',
+    skyVia: '#0B2438',
+    skyTo: '#123952',
+    orbPrimary: 'rgba(43, 212, 197, 0.32)',
+    orbSecondary: 'rgba(56, 152, 216, 0.28)',
+    orbTertiary: 'rgba(20, 184, 166, 0.24)',
+    celestialFill: '#E2F8FF',
+    celestialGlow: '#5EEAD4',
+    cloudFill: '#173A54',
+    hillFar: '#0E334B',
+    hillMid: '#0A273B',
+    hillNear: '#061B2B',
+    archFill: '#1B4965',
+    flowerColors: ['#5EEAD4', '#38BDF8'],
+    particleColors: ['#5EEAD4', '#38BDF8', '#7DD3FC', '#A5F3FC', '#2DD4BF'],
+  },
+  {
     id: 'sunset',
-    name: 'Warm Sunset',
+    name: 'Sunset Desert',
     shortLabel: 'Sunset',
+    description: 'Golden dunes & warm dusk',
     isDark: false,
-    swatchGradient: 'linear-gradient(135deg, #FFC994 0%, #F07A52 55%, #A64238 100%)',
+    themeColorMeta: '#FCE4C6',
+    swatchGradient: 'linear-gradient(135deg, #FFD199 0%, #E87043 55%, #8F3224 100%)',
     accentHex: '#D94929',
-    skyFrom: '#FFD8AA',
-    skyVia: '#F7A278',
-    skyTo: '#DC775B',
-    orbPrimary: 'rgba(255, 204, 128, 0.85)',
-    orbSecondary: 'rgba(244, 126, 94, 0.58)',
-    orbTertiary: 'rgba(196, 94, 72, 0.45)',
-    celestialFill: '#FFF1C9',
-    celestialGlow: '#FFB85C',
-    cloudFill: '#FFF2E6',
-    hillFar: '#D78A6D',
-    hillMid: '#BC664D',
-    hillNear: '#944335',
-    archFill: '#E6A888',
+    skyFrom: '#FFE0B5',
+    skyVia: '#F7A474',
+    skyTo: '#DA7252',
+    orbPrimary: 'rgba(255, 206, 128, 0.88)',
+    orbSecondary: 'rgba(240, 122, 86, 0.62)',
+    orbTertiary: 'rgba(186, 86, 62, 0.45)',
+    celestialFill: '#FFF2C9',
+    celestialGlow: '#FFB75E',
+    cloudFill: '#FFF1E3',
+    hillFar: '#D98664',
+    hillMid: '#BA5E43',
+    hillNear: '#8E3B2B',
+    archFill: '#E6A783',
     flowerColors: ['#FFD24C', '#FFF0C2'],
     particleColors: ['#FFD05B', '#FF8E63', '#FFE8B8', '#F26444', '#E8A838'],
   },
-  {
-    id: 'sakura',
-    name: 'Sakura Blossom',
-    shortLabel: 'Sakura',
-    isDark: false,
-    swatchGradient: 'linear-gradient(135deg, #FFE4EC 0%, #F2A2BC 55%, #B86B86 100%)',
-    accentHex: '#C93E6A',
-    skyFrom: '#FFE4EE',
-    skyVia: '#F8C4D6',
-    skyTo: '#E8A4BD',
-    orbPrimary: 'rgba(255, 232, 240, 0.85)',
-    orbSecondary: 'rgba(245, 166, 194, 0.58)',
-    orbTertiary: 'rgba(204, 138, 162, 0.48)',
-    celestialFill: '#FFF8FA',
-    celestialGlow: '#FFC4D8',
-    cloudFill: '#FFF9FB',
-    hillFar: '#D8A3B5',
-    hillMid: '#BF8197',
-    hillNear: '#9A5D74',
-    archFill: '#ECC6D2',
-    flowerColors: ['#FFF4F8', '#FFE07A'],
-    particleColors: ['#FF8EB4', '#FFD4E2', '#FFF4F7', '#F26B96', '#FFCC66'],
-  },
-  {
-    id: 'emerald',
-    name: 'Emerald Forest',
-    shortLabel: 'Emerald',
-    isDark: false,
-    swatchGradient: 'linear-gradient(135deg, #D9F2DC 0%, #6CC28A 52%, #246E47 100%)',
-    accentHex: '#1F7A49',
-    skyFrom: '#DFF4DF',
-    skyVia: '#B6DFBD',
-    skyTo: '#84BE92',
-    orbPrimary: 'rgba(232, 249, 200, 0.82)',
-    orbSecondary: 'rgba(130, 208, 152, 0.56)',
-    orbTertiary: 'rgba(64, 148, 96, 0.48)',
-    celestialFill: '#FAFFE0',
-    celestialGlow: '#D4EE92',
-    cloudFill: '#F7FDF7',
-    hillFar: '#86BE93',
-    hillMid: '#589B6D',
-    hillNear: '#34744C',
-    archFill: '#B6D9BA',
-    flowerColors: ['#FFE066', '#FFF8D6'],
-    particleColors: ['#8EDB42', '#FFE066', '#56C47E', '#E3F7A8', '#F2B830'],
-  },
-  {
-    id: 'night',
-    name: 'Dark Night',
-    shortLabel: 'Night',
-    isDark: true,
-    swatchGradient: 'linear-gradient(135deg, #3A2C24 0%, #1F1815 60%, #F5B841 100%)',
-    accentHex: '#F2A93B',
-    skyFrom: '#120F0D',
-    skyVia: '#1E1814',
-    skyTo: '#2E231C',
-    orbPrimary: 'rgba(245, 190, 88, 0.28)',
-    orbSecondary: 'rgba(218, 122, 68, 0.2)',
-    orbTertiary: 'rgba(116, 158, 96, 0.16)',
-    celestialFill: '#FFF2C2',
-    celestialGlow: '#F5C451',
-    cloudFill: '#332821',
-    hillFar: '#2B221B',
-    hillMid: '#211A14',
-    hillNear: '#17120E',
-    archFill: '#3A2E25',
-    flowerColors: ['#FFD45C', '#FF8E52'],
-    particleColors: ['#FFE07D', '#FFB84D', '#F59E3D', '#A6E26E', '#FFEAB0'],
-  },
 ];
 
+export function normalizeThemeId(value: unknown): AppThemeId {
+  if (value === 'botanical' || value === 'midnight' || value === 'sunset') {
+    return value;
+  }
+  if (value === 'night') return 'midnight';
+  return 'botanical';
+}
+
 export function isValidThemeId(value: unknown): value is AppThemeId {
-  return APP_THEMES.some((t) => t.id === value);
+  return value === 'botanical' || value === 'midnight' || value === 'sunset';
 }
 
 export function getThemeConfig(themeId: AppThemeId): AppThemeConfig {
   return APP_THEMES.find((t) => t.id === themeId) ?? APP_THEMES[0];
+}
+
+export function applyThemeToDocument(themeId: AppThemeId): void {
+  if (typeof document === 'undefined') return;
+  const config = getThemeConfig(themeId);
+  const root = document.documentElement;
+  root.dataset.theme = config.id;
+  root.classList.toggle('dark', config.isDark);
+
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    meta.setAttribute('content', config.themeColorMeta);
+  }
+
+  // Sync Telegram Mini App chrome colors when running inside Telegram
+  const tg = (window as unknown as {
+    Telegram?: {
+      WebApp?: {
+        setHeaderColor?: (color: string) => void;
+        setBackgroundColor?: (color: string) => void;
+      };
+    };
+  }).Telegram?.WebApp;
+  try {
+    tg?.setHeaderColor?.(config.themeColorMeta);
+    tg?.setBackgroundColor?.(config.themeColorMeta);
+  } catch {
+    // Ignore on older Telegram WebApp versions
+  }
 }

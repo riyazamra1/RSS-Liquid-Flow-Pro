@@ -1,11 +1,12 @@
 import {
   CalculatedDailyReward,
   DailyRewardTier,
+  FriendEntry,
   GameSettings,
   PlayerProgress,
 } from '../types/game';
 import { ACHIEVEMENTS, GARDEN_PLANTS } from './levelGenerator';
-import { isValidThemeId } from './themes';
+import { normalizeThemeId } from './themes';
 
 // Preserve exact RSS LIQUID FLOW localStorage keys so existing progress is NEVER lost or wiped
 const KEY_PROGRESS_V3 = 'liquid-flow-progress-v3';
@@ -15,6 +16,23 @@ const KEY_SETTINGS = 'liquid-flow-settings';
 
 export const MAX_STANDARD_LIVES = 5;
 export const LIFE_REFILL_MS = 30 * 60 * 1000; // 30 minutes per life
+export const MAX_FRIEND_LIVES_PER_DAY = 2;
+
+const FRIEND_AVATAR_COLORS = [
+  '#E01E37',
+  '#1FA84F',
+  '#7B2CBF',
+  '#E59B14',
+  '#0E9AA7',
+  '#D94929',
+];
+
+export const DEFAULT_STARTER_FRIENDS: FriendEntry[] = [
+  { id: 'f-maya', name: 'Maya', level: 3, avatarColor: '#E01E37', sentDates: {}, receivedDates: {} },
+  { id: 'f-arjun', name: 'Arjun', level: 7, avatarColor: '#1FA84F', sentDates: {}, receivedDates: {} },
+  { id: 'f-lina', name: 'Lina', level: 12, avatarColor: '#7B2CBF', sentDates: {}, receivedDates: {} },
+  { id: 'f-omar', name: 'Omar', level: 19, avatarColor: '#E59B14', sentDates: {}, receivedDates: {} },
+];
 
 /**
  * 7-Day Daily Login Reward Schedule granting escalating coins and bonus lives.
@@ -58,7 +76,9 @@ export function recomputeLives(lifeState: { count: number; lastRefillAt: number 
   nextRefillAt: number;
 } {
   const now = Date.now();
-  let count = Number.isFinite(lifeState.count) ? Math.max(0, Math.floor(lifeState.count)) : MAX_STANDARD_LIVES;
+  let count = Number.isFinite(lifeState.count)
+    ? Math.max(0, Math.floor(lifeState.count))
+    : MAX_STANDARD_LIVES;
   let lastRefillAt = Number(lifeState.lastRefillAt) || 0;
 
   if (count < MAX_STANDARD_LIVES) {
@@ -80,9 +100,37 @@ export function recomputeLives(lifeState: { count: number; lastRefillAt: number 
   };
 }
 
+function normalizeFriends(raw: unknown): FriendEntry[] {
+  if (!Array.isArray(raw)) {
+    return DEFAULT_STARTER_FRIENDS.map((f) => ({
+      ...f,
+      sentDates: { ...f.sentDates },
+      receivedDates: { ...f.receivedDates },
+    }));
+  }
+  return raw
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+    .map((item, idx) => ({
+      id: typeof item.id === 'string' && item.id ? item.id : `friend-${idx + 1}`,
+      name: typeof item.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 20) : `Friend ${idx + 1}`,
+      level: Math.max(1, Math.min(999, Math.floor(Number(item.level) || 1))),
+      avatarColor:
+        typeof item.avatarColor === 'string' && item.avatarColor
+          ? item.avatarColor
+          : FRIEND_AVATAR_COLORS[idx % FRIEND_AVATAR_COLORS.length],
+      sentDates:
+        item.sentDates && typeof item.sentDates === 'object'
+          ? { ...(item.sentDates as Record<string, number>) }
+          : {},
+      receivedDates:
+        item.receivedDates && typeof item.receivedDates === 'object'
+          ? { ...(item.receivedDates as Record<string, number>) }
+          : {},
+    }));
+}
+
 /**
  * Loads existing player progress from RSS LIQUID FLOW localStorage keys without overwriting or resetting.
- * For brand-new browsers with zero prior data, initializes clean baseline at Level 1 (0 invented fake stats).
  */
 export function loadProgress(): PlayerProgress {
   if (typeof window === 'undefined') {
@@ -106,7 +154,6 @@ export function loadProgress(): PlayerProgress {
   const legacyLevel = Math.max(1, Number(legacy.level) || 1);
   const storedBestLevel = Math.max(1, Number(v3.bestLevel) || legacyLevel);
 
-  // Backfill completedLevels if legacy bestLevel > 1 without map entries (matches live game logic)
   if (Object.keys(completedLevels).length === 0 && storedBestLevel > 1) {
     for (let i = 1; i < storedBestLevel; i++) {
       completedLevels[String(i)] = true;
@@ -154,10 +201,7 @@ export function loadProgress(): PlayerProgress {
     (typeof loginRaw.last === 'string' ? loginRaw.last : null) ||
     (typeof v3.loginDate === 'string' ? v3.loginDate : null);
 
-  const loginStreak = Math.max(
-    0,
-    Number(loginRaw.streak) || Number(v3.streak) || 0
-  );
+  const loginStreak = Math.max(0, Number(loginRaw.streak) || Number(v3.streak) || 0);
 
   const totalClaims = Math.max(
     0,
@@ -198,6 +242,7 @@ export function loadProgress(): PlayerProgress {
       lastRewardSummary:
         typeof loginRaw.lastRewardSummary === 'string' ? loginRaw.lastRewardSummary : undefined,
     },
+    friends: normalizeFriends(v3.friends),
   };
 }
 
@@ -225,11 +270,16 @@ export function createDefaultProgress(): PlayerProgress {
       totalClaims: 0,
       claimedDates: [],
     },
+    friends: DEFAULT_STARTER_FRIENDS.map((f) => ({
+      ...f,
+      sentDates: {},
+      receivedDates: {},
+    })),
   };
 }
 
 /**
- * Merges updated fields into existing RSS LIQUID FLOW storage keys safely (never deletes unrelated keys).
+ * Merges updated fields into existing RSS LIQUID FLOW storage keys safely.
  */
 export function saveProgress(progress: PlayerProgress): void {
   if (typeof window === 'undefined') return;
@@ -254,6 +304,7 @@ export function saveProgress(progress: PlayerProgress): void {
       loginDate: progress.dailyLogin.lastClaimDate,
       streak: progress.dailyLogin.streak,
       loginClaims: progress.dailyLogin.totalClaims,
+      friends: progress.friends,
     };
     localStorage.setItem(KEY_PROGRESS_V3, JSON.stringify(mergedV3));
 
@@ -293,7 +344,7 @@ export function loadSettings(): GameSettings {
     showHints: true,
     autoAdvance: true,
     mode: 'relaxed',
-    theme: 'sunlit',
+    theme: 'botanical',
   };
   if (typeof window === 'undefined') return defaults;
   const parsed = safeParse<GameSettings>(localStorage.getItem(KEY_SETTINGS));
@@ -302,7 +353,7 @@ export function loadSettings(): GameSettings {
   merged.vibrationIntensity = Number.isFinite(rawIntensity)
     ? Math.max(10, Math.min(100, Math.round(rawIntensity)))
     : defaults.vibrationIntensity;
-  merged.theme = isValidThemeId(merged.theme) ? merged.theme : defaults.theme;
+  merged.theme = normalizeThemeId(merged.theme);
   return merged;
 }
 
@@ -315,12 +366,154 @@ export function saveSettings(settings: GameSettings): void {
   }
 }
 
+/* ============================================================================
+ * LIFE MANAGEMENT & FRIEND LIFE SHARING (2 LIVES / DAY PER FRIEND)
+ * ========================================================================== */
+
+export function deductOneLife(progress: PlayerProgress): {
+  updated: PlayerProgress;
+  remaining: number;
+} {
+  const livesNow = recomputeLives(progress.lifeState);
+  const nextCount = Math.max(0, livesNow.count - 1);
+  const nextRefillAt =
+    nextCount >= MAX_STANDARD_LIVES ? 0 : livesNow.lastRefillAt || Date.now();
+  const updated: PlayerProgress = {
+    ...progress,
+    lifeState: {
+      count: nextCount,
+      lastRefillAt: nextRefillAt,
+    },
+  };
+  saveProgress(updated);
+  return { updated, remaining: nextCount };
+}
+
+export function addOneLife(progress: PlayerProgress): {
+  updated: PlayerProgress;
+  count: number;
+} {
+  const livesNow = recomputeLives(progress.lifeState);
+  const nextCount = livesNow.count + 1;
+  const updated: PlayerProgress = {
+    ...progress,
+    lifeState: {
+      count: nextCount,
+      lastRefillAt: nextCount >= MAX_STANDARD_LIVES ? 0 : livesNow.lastRefillAt,
+    },
+  };
+  saveProgress(updated);
+  return { updated, count: nextCount };
+}
+
+export function getFriendDailyQuota(friend: FriendEntry, dateKey: string) {
+  const sentToday = Math.max(0, Number(friend.sentDates[dateKey]) || 0);
+  const receivedToday = Math.max(0, Number(friend.receivedDates[dateKey]) || 0);
+  return {
+    sentToday,
+    receivedToday,
+    canSend: sentToday < MAX_FRIEND_LIVES_PER_DAY,
+    canReceive: receivedToday < MAX_FRIEND_LIVES_PER_DAY,
+    remainingSend: Math.max(0, MAX_FRIEND_LIVES_PER_DAY - sentToday),
+    remainingReceive: Math.max(0, MAX_FRIEND_LIVES_PER_DAY - receivedToday),
+  };
+}
+
+export function sendLifeToFriend(
+  progress: PlayerProgress,
+  friendId: string,
+  dateKey: string = formatDateKey()
+): { updated: PlayerProgress; friendName: string; sentToday: number } | null {
+  const target = progress.friends.find((f) => f.id === friendId);
+  if (!target) return null;
+  const quota = getFriendDailyQuota(target, dateKey);
+  if (!quota.canSend) return null;
+
+  const nextSent = quota.sentToday + 1;
+  const nextFriends = progress.friends.map((f) =>
+    f.id === friendId
+      ? { ...f, sentDates: { ...f.sentDates, [dateKey]: nextSent } }
+      : f
+  );
+  const updated: PlayerProgress = {
+    ...progress,
+    friends: nextFriends,
+  };
+  saveProgress(updated);
+  return { updated, friendName: target.name, sentToday: nextSent };
+}
+
+export function claimLifeFromFriend(
+  progress: PlayerProgress,
+  friendId: string,
+  dateKey: string = formatDateKey()
+): { updated: PlayerProgress; friendName: string; receivedToday: number } | null {
+  const target = progress.friends.find((f) => f.id === friendId);
+  if (!target) return null;
+  const quota = getFriendDailyQuota(target, dateKey);
+  if (!quota.canReceive) return null;
+
+  const nextReceived = quota.receivedToday + 1;
+  const livesNow = recomputeLives(progress.lifeState);
+  const nextLifeCount = livesNow.count + 1;
+  const nextFriends = progress.friends.map((f) =>
+    f.id === friendId
+      ? { ...f, receivedDates: { ...f.receivedDates, [dateKey]: nextReceived } }
+      : f
+  );
+
+  const updated: PlayerProgress = {
+    ...progress,
+    lifeState: {
+      count: nextLifeCount,
+      lastRefillAt: nextLifeCount >= MAX_STANDARD_LIVES ? 0 : livesNow.lastRefillAt,
+    },
+    friends: nextFriends,
+  };
+  saveProgress(updated);
+  return { updated, friendName: target.name, receivedToday: nextReceived };
+}
+
+export function addFriendEntry(
+  progress: PlayerProgress,
+  name: string,
+  level: number
+): PlayerProgress {
+  const trimmed = name.trim().slice(0, 20);
+  if (!trimmed) return progress;
+  const safeLevel = Math.max(1, Math.min(999, Math.floor(level) || 1));
+  const color = FRIEND_AVATAR_COLORS[progress.friends.length % FRIEND_AVATAR_COLORS.length];
+  const entry: FriendEntry = {
+    id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    name: trimmed,
+    level: safeLevel,
+    avatarColor: color,
+    sentDates: {},
+    receivedDates: {},
+  };
+  const updated: PlayerProgress = {
+    ...progress,
+    friends: [...progress.friends, entry],
+  };
+  saveProgress(updated);
+  return updated;
+}
+
+export function removeFriendEntry(progress: PlayerProgress, friendId: string): PlayerProgress {
+  const updated: PlayerProgress = {
+    ...progress,
+    friends: progress.friends.filter((f) => f.id !== friendId),
+  };
+  saveProgress(updated);
+  return updated;
+}
+
+/* ============================================================================
+ * DAILY LOGIN STREAK MULTIPLIER & STAR RANKS
+ * ========================================================================== */
+
 export const STREAK_MULTIPLIER_LADDER = [1.0, 1.1, 1.25, 1.4, 1.5, 1.75, 2.0] as const;
 
-/**
- * Returns the coin streak multiplier for a given consecutive day count.
- * Scales across the 7-day cycle (1.0x -> 2.0x) and rewards long streaks up to 2.5x.
- */
 export function getDailyStreakMultiplier(streakDay: number): number {
   const safeDay = Math.max(1, Math.floor(streakDay));
   if (safeDay >= 14) return 2.5;
@@ -329,9 +522,6 @@ export function getDailyStreakMultiplier(streakDay: number): number {
   return STREAK_MULTIPLIER_LADDER[safeDay - 1] ?? 1.0;
 }
 
-/**
- * Computes base coins, streak multiplier bonus coins, and total reward for a tier + streak day.
- */
 export function calculateStreakReward(
   tier: DailyRewardTier,
   streakDay: number
@@ -343,10 +533,8 @@ export function calculateStreakReward(
   let bonusCoins = 0;
   if (multiplier > 1) {
     if (baseCoins > 0) {
-      // Scale base coins by the active multiplier, rounded cleanly to nearest 5
       bonusCoins = Math.max(5, Math.round((baseCoins * (multiplier - 1)) / 5) * 5);
     } else {
-      // On life-reward days, consecutive streaks still award bonus streak coins!
       bonusCoins = Math.max(15, Math.round((50 * (multiplier - 1) * 2) / 5) * 5);
     }
   }
@@ -362,9 +550,6 @@ export function calculateStreakReward(
   };
 }
 
-/**
- * Checks whether the player can claim today's Daily Login Reward and returns the exact streak-boosted reward.
- */
 export function getDailyLoginStatus(
   progress: PlayerProgress,
   referenceDateKey: string = formatDateKey()
@@ -379,7 +564,7 @@ export function getDailyLoginStatus(
     ? streak + 1
     : 1;
 
-  const activeDayIndex = (projectedStreak - 1) % 7; // 0..6
+  const activeDayIndex = (projectedStreak - 1) % 7;
   const todayTier = DAILY_REWARD_SCHEDULE[activeDayIndex];
   const streakMultiplier = getDailyStreakMultiplier(projectedStreak);
   const nextMultiplier = getDailyStreakMultiplier(projectedStreak + 1);
@@ -400,10 +585,6 @@ export function getDailyLoginStatus(
   };
 }
 
-/**
- * Claims the daily login reward for the given date key, crediting streak-multiplied coins and/or bonus lives.
- * Bonus lives stack cleanly even when already at 5/5 so players never lose their daily bonus life!
- */
 export function applyDailyLoginClaim(
   progress: PlayerProgress,
   referenceDateKey: string = formatDateKey()
@@ -490,7 +671,7 @@ export const STAR_RANK_TIERS: StarRankTier[] = [
     id: 'apprentice',
     title: 'Apprentice',
     minStars: 15,
-    subtitle: 'Steady hand across sunlit glass jars',
+    subtitle: 'Steady hand across crystal glass jars',
     badgeBg: '#E6F5EC',
     badgeBorder: '#9ED6B3',
     badgeText: '#1D633B',
