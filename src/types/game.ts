@@ -54,6 +54,7 @@ export interface PlayerProgress {
   levelsCleared: number;
   completedLevels: Record<string, boolean>;
   levelStars: Record<string, number>;
+  levelScores: Record<string, number>;
   coins: number;
   bestScore: number;
   score: number;

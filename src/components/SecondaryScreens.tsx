@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Award,
-  CalendarPlus,
   Check,
   Coins,
   Crown,
@@ -9,28 +8,36 @@ import {
   Gift,
   Heart,
   Lock,
+  Palette,
+  Send,
   Settings,
   Share2,
+  Smartphone,
   Star,
   Trophy,
+  Users,
   Vibrate,
   X,
 } from 'lucide-react';
-import { GameMode, GameSettings, PlayerProgress } from '../types/game';
+import { AppThemeId, GameMode, GameSettings, PlayerProgress } from '../types/game';
 import { ACHIEVEMENTS, GARDEN_PLANTS } from '../utils/levelGenerator';
+import { detectRuntimePlatform } from '../utils/platform';
 import {
   calculateStreakReward,
   DAILY_REWARD_SCHEDULE,
   getDailyLoginStatus,
+  getFriendDailyQuota,
   getStarRankInfo,
   getTotalStars,
+  MAX_FRIEND_LIVES_PER_DAY,
   STAR_RANK_TIERS,
 } from '../utils/storage';
+import { APP_THEMES } from '../utils/themes';
+import { PWAInstallButton } from './PWAInstallButton';
 import {
   DailyChestIllustration,
   GardenSanctuaryBanner,
   PlantIllustration,
-  RssDropletEmblem,
 } from './SceneryArtwork';
 
 /* ============================================================================
@@ -42,10 +49,10 @@ export const GardenScreen: React.FC<{ progress: PlayerProgress }> = ({ progress 
   ).length;
 
   return (
-    <div className="max-w-5xl mx-auto px-3 sm:px-6 pt-4 pb-24 lg:pb-10 space-y-5">
-      <div className="relative rounded-3xl overflow-hidden border border-[#E4D6B8] h-44 sm:h-52 shadow-[0_12px_30px_-16px_rgba(110,85,48,0.22)]">
+    <div className="relative z-10 max-w-5xl mx-auto px-3 sm:px-6 pt-4 pb-24 lg:pb-10 space-y-5">
+      <div className="relative rounded-3xl overflow-hidden border theme-border h-44 sm:h-52 shadow-[0_12px_30px_-16px_rgba(24,18,12,0.28)]">
         <GardenSanctuaryBanner />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#2D2218]/65 via-[#2D2218]/20 to-transparent flex items-end p-5 sm:p-6">
+        <div className="absolute inset-0 bg-gradient-to-t from-[#2D2218]/72 via-[#2D2218]/24 to-transparent flex items-end p-5 sm:p-6">
           <div className="text-white">
             <p className="text-xs font-semibold text-[#FDECC4] tabular-nums">
               {unlockedCount} / {GARDEN_PLANTS.length} Botanical Species Unlocked
@@ -65,24 +72,22 @@ export const GardenScreen: React.FC<{ progress: PlayerProgress }> = ({ progress 
           return (
             <div
               key={plant.id}
-              className={`rounded-3xl p-4 border flex flex-col items-center text-center transition-colors ${
-                unlocked
-                  ? 'bg-[#FFFDF8] border-[#DFE6D5] shadow-xs'
-                  : 'bg-[#F5EFE2] border-[#E5DAC4] opacity-80'
+              className={`rounded-3xl p-4 border flex flex-col items-center text-center transition-colors backdrop-blur-md ${
+                unlocked ? 'theme-surface-glass shadow-xs' : 'theme-surface-muted opacity-80'
               }`}
             >
               <div className="mb-2">
                 <PlantIllustration id={plant.id} unlocked={unlocked} />
               </div>
-              <h2 className="font-display text-base font-bold text-[#2D2218]">{plant.name}</h2>
-              <p className="mt-1 text-xs text-[#6E5B47] leading-snug">{plant.description}</p>
+              <h2 className="font-display text-base font-bold theme-ink">{plant.name}</h2>
+              <p className="mt-1 text-xs theme-ink-secondary leading-snug">{plant.description}</p>
               <div className="mt-3 text-[11px] font-bold tabular-nums">
                 {unlocked ? (
-                  <span className="inline-flex items-center gap-1 text-[#247243]">
+                  <span className="inline-flex items-center gap-1 text-[#247243] dark:text-[#5EEAD4]">
                     <Check className="w-3.5 h-3.5" /> Blooming
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[#8A7760]">
+                  <span className="inline-flex items-center gap-1 theme-ink-muted">
                     <Lock className="w-3 h-3" /> Clear {plant.unlockAt} levels
                   </span>
                 )}
@@ -96,7 +101,7 @@ export const GardenScreen: React.FC<{ progress: PlayerProgress }> = ({ progress 
 };
 
 /* ============================================================================
- * REWARDS SCREEN
+ * REWARDS SCREEN (Daily Login Rewards + Daily Challenge + Friend Life Sharing)
  * ========================================================================== */
 export const RewardsScreen: React.FC<{
   progress: PlayerProgress;
@@ -104,34 +109,44 @@ export const RewardsScreen: React.FC<{
   onClaimDailyLogin: () => void;
   onPlayDaily: () => void;
   onShare: () => void;
-}> = ({ progress, referenceDateKey, onClaimDailyLogin, onPlayDaily, onShare }) => {
+  onSendFriendLife: (friendId: string) => void;
+  onClaimFriendLife: (friendId: string) => void;
+}> = ({
+  progress,
+  referenceDateKey,
+  onClaimDailyLogin,
+  onPlayDaily,
+  onShare,
+  onSendFriendLife,
+  onClaimFriendLife,
+}) => {
   const dailyStatus = getDailyLoginStatus(progress, referenceDateKey);
   const dailyClearedToday = Boolean(progress.dailyClears[referenceDateKey]);
 
   return (
-    <div className="max-w-5xl mx-auto px-3 sm:px-6 pt-4 pb-24 lg:pb-10 space-y-5">
+    <div className="relative z-10 max-w-5xl mx-auto px-3 sm:px-6 pt-4 pb-24 lg:pb-10 space-y-5">
       <div>
-        <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#2D2218]">
-          Rewards & Streaks
+        <h1 className="font-display text-2xl sm:text-3xl font-bold theme-ink">
+          Rewards &amp; Daily Events
         </h1>
-        <p className="text-sm text-[#6E5B47]">
-          Collect daily login bonuses, complete daily puzzles, and unlock level milestones.
+        <p className="text-sm theme-ink-secondary">
+          Claim daily login streak bonuses, complete today&apos;s one-time Daily Challenge, and share lives with friends.
         </p>
       </div>
 
       {/* Full 7-Day Daily Login Rewards Card */}
-      <section className="rounded-3xl bg-[#FFFDF8] border border-[#E6DAC0] p-5 shadow-[0_12px_30px_-16px_rgba(110,85,48,0.2)]">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#EFE5D0]">
+      <section className="rounded-3xl theme-surface-glass backdrop-blur-md border p-5 shadow-[0_12px_30px_-16px_rgba(24,18,12,0.25)]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b theme-border">
           <div className="flex items-center gap-3.5">
             <DailyChestIllustration className="w-16 h-16 shrink-0" />
             <div>
-              <p className="text-xs font-bold text-[#9A5B09] tabular-nums">
+              <p className="text-xs font-bold text-[#9A5B09] dark:text-[#F5BC38] tabular-nums">
                 Daily Login Streak · {dailyStatus.projectedStreak}d ({dailyStatus.streakMultiplier}× Coins)
               </p>
-              <h2 className="font-display text-xl font-bold text-[#2D2218]">
+              <h2 className="font-display text-xl font-bold theme-ink">
                 7-Day Bonus Calendar
               </h2>
-              <p className="text-xs sm:text-sm text-[#6E5B47]">
+              <p className="text-xs sm:text-sm theme-ink-secondary">
                 Consecutive visits grow your streak multiplier for extra bonus coins and lives.
               </p>
             </div>
@@ -144,7 +159,7 @@ export const RewardsScreen: React.FC<{
             className={`min-h-[46px] px-5 py-2.5 rounded-2xl font-display text-sm font-bold flex items-center justify-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               dailyStatus.canClaim
                 ? 'btn-tactile-coral text-white'
-                : 'bg-[#EEF5F0] text-[#247243] border border-[#C3E1CD] cursor-default'
+                : 'bg-[#EEF5F0] dark:bg-[#143D38] text-[#247243] dark:text-[#5EEAD4] border border-[#C3E1CD] dark:border-[#246A60] cursor-default'
             }`}
           >
             {dailyStatus.canClaim ? (
@@ -175,26 +190,26 @@ export const RewardsScreen: React.FC<{
                 key={tier.day}
                 className={`rounded-2xl p-3 border flex flex-col items-center text-center ${
                   isToday
-                    ? 'bg-[#FFF3CE] border-[#E59B14]'
+                    ? 'bg-[#FFF3CE] dark:bg-[#2F2A14] border-[#E59B14]'
                     : done
-                    ? 'bg-[#EEF7F1] border-[#BFE2CB]'
-                    : 'bg-[#FAF4E7] border-[#E8DEC8]'
+                    ? 'bg-[#EEF7F1] dark:bg-[#133831] border-[#BFE2CB] dark:border-[#246A60]'
+                    : 'theme-surface-muted'
                 }`}
               >
-                <span className="text-xs font-bold text-[#5C4936] tabular-nums">{tier.label}</span>
+                <span className="text-xs font-bold theme-ink-secondary tabular-nums">{tier.label}</span>
                 <div className="my-2 flex flex-col items-center gap-1">
                   {calc.totalCoins > 0 && (
-                    <span className="inline-flex items-center gap-1 font-display text-sm font-bold text-[#8F5906] tabular-nums">
+                    <span className="inline-flex items-center gap-1 font-display text-sm font-bold text-[#8F5906] dark:text-[#F5BC38] tabular-nums">
                       <Coins className="w-4 h-4 text-[#E59B14]" />+{calc.totalCoins}
                     </span>
                   )}
                   {calc.lives > 0 && (
-                    <span className="inline-flex items-center gap-1 font-display text-sm font-bold text-[#B82843] tabular-nums">
+                    <span className="inline-flex items-center gap-1 font-display text-sm font-bold text-[#B82843] dark:text-[#FF7894] tabular-nums">
                       <Heart className="w-4 h-4 text-[#D93D59] fill-[#D93D59]" />+{calc.lives}
                     </span>
                   )}
                 </div>
-                <span className="text-[11px] font-semibold text-[#75614B] tabular-nums">
+                <span className="text-[11px] font-semibold theme-ink-muted tabular-nums">
                   {calc.bonusCoins > 0 ? `${calc.multiplier}×` : done ? 'Claimed' : isToday ? 'Available' : 'Upcoming'}
                 </span>
               </div>
@@ -203,55 +218,130 @@ export const RewardsScreen: React.FC<{
         </div>
       </section>
 
-      {/* Daily Challenge + Share Row */}
+      {/* Daily Challenge (Strictly Once Per Day) + Share Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-3xl bg-[#FFFDF8] border border-[#E6DAC0] p-5 flex flex-col justify-between gap-4">
+        <div className="rounded-3xl theme-surface-glass backdrop-blur-md border p-5 flex flex-col justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C25B1A] tabular-nums">
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C25B1A] dark:text-[#FF9E5E] tabular-nums">
               <Flame className="w-4 h-4" />
               <span>Daily Challenge · Streak {progress.dailyChallengeStreak}</span>
             </div>
-            <h2 className="mt-1 font-display text-lg font-bold text-[#2D2218]">
-              Today’s Seeded Puzzle
+            <h2 className="mt-1 font-display text-lg font-bold theme-ink">
+              Today&apos;s Seeded Puzzle
             </h2>
-            <p className="mt-1 text-sm text-[#6E5B47]">
+            <p className="mt-1 text-sm theme-ink-secondary">
               {dailyClearedToday
-                ? 'Completed for today! You can replay for fun anytime.'
-                : 'Complete today’s unique liquid flow layout for +25 coins.'}
+                ? 'Daily Challenge completed for today! Come back tomorrow to extend your streak.'
+                : 'Complete today’s unique liquid flow layout once to earn +25 coins and +1 streak.'}
             </p>
           </div>
           <button
             type="button"
             onClick={onPlayDaily}
-            className="min-h-[46px] px-5 py-2.5 rounded-2xl btn-tactile-emerald text-white font-display text-sm font-bold cursor-pointer self-start"
+            disabled={dailyClearedToday}
+            className={`min-h-[46px] px-5 py-2.5 rounded-2xl font-display text-sm font-bold self-start inline-flex items-center gap-2 ${
+              dailyClearedToday
+                ? 'bg-[#EEF5F0] dark:bg-[#143D38] text-[#247243] dark:text-[#5EEAD4] border border-[#C3E1CD] dark:border-[#246A60] cursor-not-allowed'
+                : 'btn-tactile-emerald text-white cursor-pointer'
+            }`}
           >
-            {dailyClearedToday ? 'Replay Daily' : 'Play Daily Challenge'}
+            {dailyClearedToday ? (
+              <>
+                <Check className="w-4 h-4" />
+                <span>Completed Today · Come Back Tomorrow</span>
+              </>
+            ) : (
+              <span>Play Daily Challenge</span>
+            )}
           </button>
         </div>
 
-        <div className="rounded-3xl bg-[#FFFDF8] border border-[#E6DAC0] p-5 flex flex-col justify-between gap-4">
+        <div className="rounded-3xl theme-surface-glass backdrop-blur-md border p-5 flex flex-col justify-between gap-4">
           <div>
-            <h2 className="font-display text-lg font-bold text-[#2D2218]">Share RSS Liquid Flow</h2>
-            <p className="mt-1 text-sm text-[#6E5B47]">
-              Invite friends to play RSS Liquid Flow and compare stars across sunlit worlds.
+            <h2 className="font-display text-lg font-bold theme-ink">Invite Friends &amp; Share</h2>
+            <p className="mt-1 text-sm theme-ink-secondary">
+              Share RSS Liquid Flow on Telegram, Android, or web so friends can race your level and share up to 2 lives/day.
             </p>
           </div>
           <button
             type="button"
             onClick={onShare}
-            className="min-h-[46px] px-5 py-2.5 rounded-2xl bg-[#F6EEDB] hover:bg-[#EFE2C6] text-[#4C3A26] font-display text-sm font-bold inline-flex items-center gap-2 cursor-pointer self-start"
+            className="min-h-[46px] px-5 py-2.5 rounded-2xl theme-surface-muted border font-display text-sm font-bold inline-flex items-center gap-2 cursor-pointer self-start hover:opacity-90"
           >
-            <Share2 className="w-4 h-4" />
+            <Share2 className="w-4 h-4 text-[#E55A3C] dark:text-[#2BD4C5]" />
             <span>Share Game Link</span>
           </button>
         </div>
       </div>
 
+      {/* Friends Life Sharing Panel (2 lives/day per friend) */}
+      <section className="rounded-3xl theme-surface-glass backdrop-blur-md border p-5">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-[#E55A3C] dark:text-[#2BD4C5]" />
+            <h2 className="font-display text-lg font-bold theme-ink">Friends Life Sharing</h2>
+          </div>
+          <span className="text-xs font-semibold theme-ink-secondary tabular-nums">
+            {MAX_FRIEND_LIVES_PER_DAY} lives / day per friend
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {progress.friends.map((friend) => {
+            const quota = getFriendDailyQuota(friend, referenceDateKey);
+            return (
+              <div
+                key={friend.id}
+                className="rounded-2xl theme-surface-muted border p-3.5 flex items-center justify-between gap-2"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span
+                    className="w-9 h-9 rounded-full text-white font-display text-xs font-bold flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: friend.avatarColor }}
+                  >
+                    {friend.name.slice(0, 2).toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="font-display text-sm font-bold theme-ink truncate">
+                      {friend.name}
+                    </div>
+                    <div className="text-xs theme-ink-secondary tabular-nums">
+                      Level {friend.level}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onSendFriendLife(friend.id)}
+                    disabled={!quota.canSend}
+                    className="min-h-[36px] px-2.5 py-1 rounded-xl bg-[#FBEBD0] dark:bg-[#183C57] disabled:opacity-45 text-[#7E4B0A] dark:text-[#7CE8FF] text-xs font-bold inline-flex items-center gap-1 cursor-pointer tabular-nums"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send ({quota.remainingSend}/{MAX_FRIEND_LIVES_PER_DAY})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onClaimFriendLife(friend.id)}
+                    disabled={!quota.canReceive}
+                    className="min-h-[36px] px-2.5 py-1 rounded-xl bg-[#FFE7EC] dark:bg-[#3A1E33] disabled:opacity-45 text-[#B82843] dark:text-[#FF8AA1] text-xs font-bold inline-flex items-center gap-1 cursor-pointer tabular-nums"
+                  >
+                    <Heart className="w-3.5 h-3.5 fill-current" />
+                    <span>+{quota.remainingReceive}</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       {/* Achievements */}
-      <section className="rounded-3xl bg-[#FFFDF8] border border-[#E6DAC0] p-5">
+      <section className="rounded-3xl theme-surface-glass backdrop-blur-md border p-5">
         <div className="flex items-center gap-2 mb-4">
           <Trophy className="w-5 h-5 text-[#E59B14]" />
-          <h2 className="font-display text-lg font-bold text-[#2D2218]">Journey Milestones</h2>
+          <h2 className="font-display text-lg font-bold theme-ink">Journey Milestones</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {ACHIEVEMENTS.map((ach) => {
@@ -261,23 +351,23 @@ export const RewardsScreen: React.FC<{
               <div
                 key={ach.id}
                 className={`rounded-2xl p-4 border ${
-                  done ? 'bg-[#EEF7F1] border-[#BFE2CB]' : 'bg-[#FAF4E7] border-[#E8DEC8]'
+                  done
+                    ? 'bg-[#EEF7F1] dark:bg-[#133831] border-[#BFE2CB] dark:border-[#246A60]'
+                    : 'theme-surface-muted'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-display text-base font-bold text-[#2D2218]">{ach.title}</span>
-                  <span className="text-xs font-bold text-[#8F5906] tabular-nums">
+                  <span className="font-display text-base font-bold theme-ink">{ach.title}</span>
+                  <span className="text-xs font-bold text-[#8F5906] dark:text-[#F5BC38] tabular-nums">
                     +{ach.rewardCoins} coins
                   </span>
                 </div>
-                <p className="mt-0.5 text-xs text-[#6E5B47] tabular-nums">
-                  Clear {ach.target} {ach.target === 1 ? 'level' : 'levels'} ({Math.min(progress.levelsCleared, ach.target)}/{ach.target})
+                <p className="mt-0.5 text-xs theme-ink-secondary tabular-nums">
+                  Clear {ach.target} {ach.target === 1 ? 'level' : 'levels'} (
+                  {Math.min(progress.levelsCleared, ach.target)}/{ach.target})
                 </p>
-                <div className="mt-2.5 h-2 rounded-full bg-[#E6DAC2] overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-[#2E8555]"
-                    style={{ width: `${pct}%` }}
-                  />
+                <div className="mt-2.5 h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                  <div className="h-full rounded-full bg-[#2E8555]" style={{ width: `${pct}%` }} />
                 </div>
               </div>
             );
@@ -293,17 +383,15 @@ export const RewardsScreen: React.FC<{
  * ========================================================================== */
 export const ProfileScreen: React.FC<{
   progress: PlayerProgress;
-  referenceDateKey: string;
   onUpdateName: (name: string) => void;
   onOpenSettings: () => void;
-  onSimulateNextDay: () => void;
-}> = ({ progress, referenceDateKey, onUpdateName, onOpenSettings, onSimulateNextDay }) => {
+}> = ({ progress, onUpdateName, onOpenSettings }) => {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(progress.playerName);
   const totalStars = getTotalStars(progress);
   const starRank = getStarRankInfo(totalStars);
+  const platform = detectRuntimePlatform();
 
-  // Real breakdown of earned star ratings across completed levels
   const starValues = Object.values(progress.levelStars).map((v) => Number(v) || 0);
   const threeStarCount = starValues.filter((s) => s >= 3).length;
   const twoStarCount = starValues.filter((s) => s === 2).length;
@@ -316,11 +404,24 @@ export const ProfileScreen: React.FC<{
     setEditing(false);
   };
 
+  const platformLabel =
+    platform === 'telegram'
+      ? 'Telegram Mini App'
+      : platform === 'android-webview'
+      ? 'Android App'
+      : platform === 'pwa'
+      ? 'Installed App'
+      : 'Web Browser';
+
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 pt-4 pb-24 lg:pb-10 space-y-5">
-      <div className="rounded-3xl bg-[#FFFDF8] border border-[#E6DAC0] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="relative z-10 max-w-4xl mx-auto px-3 sm:px-6 pt-4 pb-24 lg:pb-10 space-y-5">
+      <div className="rounded-3xl theme-surface-glass backdrop-blur-md border p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <RssDropletEmblem className="w-16 h-16 shrink-0" />
+          <img
+            src="/logo.png"
+            alt="RSS Liquid Flow"
+            className="w-16 h-16 object-contain shrink-0 drop-shadow-sm"
+          />
           <div>
             {editing ? (
               <form onSubmit={handleSaveName} className="flex items-center gap-2">
@@ -329,7 +430,7 @@ export const ProfileScreen: React.FC<{
                   value={draftName}
                   onChange={(e) => setDraftName(e.target.value)}
                   maxLength={24}
-                  className="px-3 py-1.5 rounded-xl border border-[#D9C9AA] bg-[#FAF6EC] text-sm font-semibold text-[#2D2218] focus:outline-2 focus:outline-[#E55A3C]"
+                  className="px-3 py-1.5 rounded-xl theme-surface-muted border text-sm font-semibold focus:outline-2 focus:outline-[#E55A3C]"
                   aria-label="Player name"
                 />
                 <button
@@ -341,7 +442,7 @@ export const ProfileScreen: React.FC<{
               </form>
             ) : (
               <div className="flex items-center gap-2">
-                <h1 className="font-display text-2xl font-bold text-[#2D2218]">
+                <h1 className="font-display text-2xl font-bold theme-ink">
                   {progress.playerName}
                 </h1>
                 <button
@@ -350,14 +451,14 @@ export const ProfileScreen: React.FC<{
                     setDraftName(progress.playerName);
                     setEditing(true);
                   }}
-                  className="text-xs font-semibold text-[#9E5B0C] hover:underline cursor-pointer"
+                  className="text-xs font-semibold text-[#9E5B0C] dark:text-[#5EEAD4] hover:underline cursor-pointer"
                 >
                   Edit
                 </button>
               </div>
             )}
-            <p className="text-xs sm:text-sm text-[#6E5B47]">
-              Local progress preserved safely in browser storage
+            <p className="text-xs sm:text-sm theme-ink-secondary">
+              {platformLabel} · Progress saved locally
             </p>
           </div>
         </div>
@@ -365,17 +466,17 @@ export const ProfileScreen: React.FC<{
         <button
           type="button"
           onClick={onOpenSettings}
-          className="min-h-[44px] px-4 py-2 rounded-2xl bg-[#F6EEDB] hover:bg-[#EFE2C6] text-[#4C3A26] text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer"
+          className="min-h-[44px] px-4 py-2 rounded-2xl theme-surface-muted border text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer"
         >
           <Settings className="w-4 h-4" />
-          <span>Settings</span>
+          <span>Settings &amp; Themes</span>
         </button>
       </div>
 
       {/* Star Overview Panel with Rank-Based Badge */}
       <section
         aria-label="Star Overview"
-        className="rounded-3xl bg-gradient-to-br from-[#FFFDF7] via-[#FBF3E0] to-[#F7EBD0] border border-[#E5D3AD] p-5 sm:p-6 shadow-[0_12px_30px_-16px_rgba(110,85,48,0.22)]"
+        className="rounded-3xl theme-surface-glass backdrop-blur-md border p-5 sm:p-6 shadow-[0_12px_30px_-16px_rgba(24,18,12,0.25)]"
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
@@ -383,22 +484,19 @@ export const ProfileScreen: React.FC<{
               <Star className="w-7 h-7 fill-[#FFF5CC] text-[#7C4704]" />
             </div>
             <div>
-              <p className="text-xs font-bold text-[#8A6128] uppercase tracking-wider">
-                Star Overview
-              </p>
+              <p className="text-xs font-bold text-[#9A6520] dark:text-[#F5BC38]">Star Overview</p>
               <div className="flex items-baseline gap-2">
-                <span className="font-display text-3xl font-bold text-[#2D2218] tabular-nums">
+                <span className="font-display text-3xl font-bold theme-ink tabular-nums">
                   {totalStars}
                 </span>
-                <span className="text-sm font-semibold text-[#6E5B47]">
+                <span className="text-sm font-semibold theme-ink-secondary">
                   Total {totalStars === 1 ? 'Star' : 'Stars'} Earned
                 </span>
               </div>
-              <p className="text-xs text-[#6E5B47] mt-0.5">{starRank.current.subtitle}</p>
+              <p className="text-xs theme-ink-secondary mt-0.5">{starRank.current.subtitle}</p>
             </div>
           </div>
 
-          {/* Rank-Based Badge */}
           <div
             className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border-2 shadow-xs self-start sm:self-center shrink-0"
             style={{
@@ -413,9 +511,7 @@ export const ProfileScreen: React.FC<{
               <Award className="w-5 h-5 shrink-0" />
             )}
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-wider opacity-80 leading-none">
-                Rank
-              </div>
+              <div className="text-[10px] font-bold opacity-80 leading-none">Rank</div>
               <div className="font-display text-lg font-bold leading-tight">
                 {starRank.current.title}
               </div>
@@ -423,9 +519,8 @@ export const ProfileScreen: React.FC<{
           </div>
         </div>
 
-        {/* Progress Bar Toward Next Rank */}
-        <div className="mt-4 pt-4 border-t border-[#E8D8B5]">
-          <div className="flex items-center justify-between text-xs font-semibold text-[#6E5B47] mb-1.5 tabular-nums">
+        <div className="mt-4 pt-4 border-t theme-border">
+          <div className="flex items-center justify-between text-xs font-semibold theme-ink-secondary mb-1.5 tabular-nums">
             <span>
               {starRank.next
                 ? `${starRank.starsToNext} more ${
@@ -433,11 +528,11 @@ export const ProfileScreen: React.FC<{
                   } to reach ${starRank.next.title}`
                 : 'Maximum Grandmaster Rank Achieved'}
             </span>
-            <span className="text-[#2D2218] font-bold">
+            <span className="theme-ink font-bold">
               {starRank.next ? `${totalStars} / ${starRank.next.minStars}` : `${totalStars} ★`}
             </span>
           </div>
-          <div className="w-full h-2.5 rounded-full bg-[#EAE0C8] overflow-hidden">
+          <div className="w-full h-2.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-300"
               style={{
@@ -447,41 +542,40 @@ export const ProfileScreen: React.FC<{
             />
           </div>
 
-          {/* Star Breakdown & Rank Ladder */}
           <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-2xl bg-[#FFFDF8]/85 border border-[#EADCC0] py-2 px-2">
+            <div className="rounded-2xl theme-surface-muted border py-2 px-2">
               <div className="flex items-center justify-center gap-0.5 text-[#E8A317]">
                 <Star className="w-3.5 h-3.5 fill-[#F5BC38]" />
                 <Star className="w-3.5 h-3.5 fill-[#F5BC38]" />
                 <Star className="w-3.5 h-3.5 fill-[#F5BC38]" />
               </div>
-              <div className="mt-1 font-display text-base font-bold text-[#2D2218] tabular-nums">
+              <div className="mt-1 font-display text-base font-bold theme-ink tabular-nums">
                 {threeStarCount}
               </div>
-              <div className="text-[11px] text-[#7A664F]">3-Star Clears</div>
+              <div className="text-[11px] theme-ink-secondary">3-Star Clears</div>
             </div>
-            <div className="rounded-2xl bg-[#FFFDF8]/85 border border-[#EADCC0] py-2 px-2">
+            <div className="rounded-2xl theme-surface-muted border py-2 px-2">
               <div className="flex items-center justify-center gap-0.5 text-[#E8A317]">
                 <Star className="w-3.5 h-3.5 fill-[#F5BC38]" />
                 <Star className="w-3.5 h-3.5 fill-[#F5BC38]" />
               </div>
-              <div className="mt-1 font-display text-base font-bold text-[#2D2218] tabular-nums">
+              <div className="mt-1 font-display text-base font-bold theme-ink tabular-nums">
                 {twoStarCount}
               </div>
-              <div className="text-[11px] text-[#7A664F]">2-Star Clears</div>
+              <div className="text-[11px] theme-ink-secondary">2-Star Clears</div>
             </div>
-            <div className="rounded-2xl bg-[#FFFDF8]/85 border border-[#EADCC0] py-2 px-2">
+            <div className="rounded-2xl theme-surface-muted border py-2 px-2">
               <div className="flex items-center justify-center gap-0.5 text-[#E8A317]">
                 <Star className="w-3.5 h-3.5 fill-[#F5BC38]" />
               </div>
-              <div className="mt-1 font-display text-base font-bold text-[#2D2218] tabular-nums">
+              <div className="mt-1 font-display text-base font-bold theme-ink tabular-nums">
                 {oneStarCount}
               </div>
-              <div className="text-[11px] text-[#7A664F]">1-Star Clears</div>
+              <div className="text-[11px] theme-ink-secondary">1-Star Clears</div>
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-1.5 text-[11px] text-[#7A664F] tabular-nums">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-1.5 text-[11px] theme-ink-secondary tabular-nums">
             {STAR_RANK_TIERS.map((tier) => {
               const reached = totalStars >= tier.minStars;
               return (
@@ -489,9 +583,9 @@ export const ProfileScreen: React.FC<{
                   key={tier.id}
                   className={`font-semibold ${
                     tier.id === starRank.current.id
-                      ? 'text-[#2D2218] underline decoration-[#E59B14] decoration-2 underline-offset-4'
+                      ? 'theme-ink underline decoration-[#E59B14] decoration-2 underline-offset-4'
                       : reached
-                      ? 'text-[#2E8555]'
+                      ? 'text-[#2E8555] dark:text-[#5EEAD4]'
                       : 'opacity-70'
                   }`}
                 >
@@ -505,70 +599,67 @@ export const ProfileScreen: React.FC<{
 
       {/* Real Statistics Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-        <div className="rounded-2xl bg-[#FFFDF8] border border-[#E6DAC0] p-4">
-          <div className="text-xs font-medium text-[#7A664F]">Levels Cleared</div>
-          <div className="mt-1 font-display text-2xl font-bold text-[#2D2218] tabular-nums">
+        <div className="rounded-2xl theme-surface-glass backdrop-blur-md border p-4">
+          <div className="text-xs font-medium theme-ink-secondary">Levels Cleared</div>
+          <div className="mt-1 font-display text-2xl font-bold theme-ink tabular-nums">
             {progress.levelsCleared}
           </div>
         </div>
-        <div className="rounded-2xl bg-[#FFFDF8] border border-[#E6DAC0] p-4">
-          <div className="text-xs font-medium text-[#7A664F]">Best Level</div>
-          <div className="mt-1 font-display text-2xl font-bold text-[#2D2218] tabular-nums">
+        <div className="rounded-2xl theme-surface-glass backdrop-blur-md border p-4">
+          <div className="text-xs font-medium theme-ink-secondary">Best Level</div>
+          <div className="mt-1 font-display text-2xl font-bold theme-ink tabular-nums">
             {progress.bestLevel}
           </div>
         </div>
-        <div className="rounded-2xl bg-[#FFFDF8] border border-[#E6DAC0] p-4">
-          <div className="text-xs font-medium text-[#7A664F]">Total Stars</div>
-          <div className="mt-1 font-display text-2xl font-bold text-[#2D2218] tabular-nums inline-flex items-center gap-1.5">
+        <div className="rounded-2xl theme-surface-glass backdrop-blur-md border p-4">
+          <div className="text-xs font-medium theme-ink-secondary">Total Stars</div>
+          <div className="mt-1 font-display text-2xl font-bold theme-ink tabular-nums inline-flex items-center gap-1.5">
             <Star className="w-5 h-5 text-[#E8A317] fill-[#F5BC38]" />
             <span>{totalStars}</span>
           </div>
         </div>
-        <div className="rounded-2xl bg-[#FFFDF8] border border-[#E6DAC0] p-4">
-          <div className="text-xs font-medium text-[#7A664F]">Coins</div>
-          <div className="mt-1 font-display text-2xl font-bold text-[#9A5F0A] tabular-nums">
+        <div className="rounded-2xl theme-surface-glass backdrop-blur-md border p-4">
+          <div className="text-xs font-medium theme-ink-secondary">Coins</div>
+          <div className="mt-1 font-display text-2xl font-bold text-[#9A5F0A] dark:text-[#F5BC38] tabular-nums">
             {progress.coins.toLocaleString()}
           </div>
         </div>
-        <div className="rounded-2xl bg-[#FFFDF8] border border-[#E6DAC0] p-4">
-          <div className="text-xs font-medium text-[#7A664F]">Total Moves</div>
-          <div className="mt-1 font-display text-2xl font-bold text-[#2D2218] tabular-nums">
+        <div className="rounded-2xl theme-surface-glass backdrop-blur-md border p-4">
+          <div className="text-xs font-medium theme-ink-secondary">Total Moves</div>
+          <div className="mt-1 font-display text-2xl font-bold theme-ink tabular-nums">
             {progress.totalMoves.toLocaleString()}
           </div>
         </div>
-        <div className="rounded-2xl bg-[#FFFDF8] border border-[#E6DAC0] p-4">
-          <div className="text-xs font-medium text-[#7A664F]">Daily Login Streak</div>
-          <div className="mt-1 font-display text-2xl font-bold text-[#2E8555] tabular-nums">
+        <div className="rounded-2xl theme-surface-glass backdrop-blur-md border p-4">
+          <div className="text-xs font-medium theme-ink-secondary">Daily Login Streak</div>
+          <div className="mt-1 font-display text-2xl font-bold text-[#2E8555] dark:text-[#5EEAD4] tabular-nums">
             {progress.dailyLogin.streak} {progress.dailyLogin.streak === 1 ? 'day' : 'days'}
           </div>
         </div>
       </div>
 
-      {/* Non-destructive Daily Login Verification Helper */}
-      <div className="rounded-3xl bg-[#FFFDF8] border border-[#E6DAC0] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Multi-Platform Install Card */}
+      <div className="rounded-3xl theme-surface-glass backdrop-blur-md border p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="font-display text-base font-bold text-[#2D2218]">
-            Daily Login Reward Preview
+          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#E55A3C] dark:text-[#2BD4C5]">
+            <Smartphone className="w-4 h-4" />
+            <span>Play Everywhere</span>
+          </div>
+          <h2 className="mt-1 font-display text-base font-bold theme-ink">
+            Android, Web &amp; Telegram Mini App
           </h2>
-          <p className="mt-0.5 text-xs sm:text-sm text-[#6E5B47] tabular-nums">
-            Active calendar date: {referenceDateKey}. Preview tomorrow’s login check to verify multi-day coin & bonus life rewards without resetting progress.
+          <p className="mt-0.5 text-xs theme-ink-secondary">
+            Install RSS Liquid Flow directly to your Android home screen for full-screen offline play.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onSimulateNextDay}
-          className="min-h-[44px] px-4 py-2 rounded-2xl bg-[#FBEBD0] hover:bg-[#F7DCAD] text-[#7E4B0A] text-xs font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-        >
-          <CalendarPlus className="w-4 h-4" />
-          <span>Preview Next Day</span>
-        </button>
+        <PWAInstallButton />
       </div>
     </div>
   );
 };
 
 /* ============================================================================
- * SETTINGS MODAL
+ * SETTINGS MODAL (With Botanical / Midnight Ocean / Sunset Desert Theme Engine)
  * ========================================================================== */
 export const SettingsModal: React.FC<{
   open: boolean;
@@ -608,31 +699,82 @@ export const SettingsModal: React.FC<{
     }
   };
 
+  const handleSelectTheme = (themeId: AppThemeId) => {
+    onUpdate({ ...settings, theme: themeId });
+  };
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-[#2D2218]/45 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-heading"
     >
-      <div className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl bg-[#FFFDF8] border border-[#E7DAC0] p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between pb-3 border-b border-[#EFE5D0]">
-          <h2 id="settings-heading" className="font-display text-xl font-bold text-[#2D2218]">
+      <div className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl theme-surface border p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between pb-3 border-b theme-border">
+          <h2 id="settings-heading" className="font-display text-xl font-bold theme-ink">
             Settings
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close settings"
-            className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-[#F6EEDB] hover:bg-[#EFE2C6] text-[#4C3A26] cursor-pointer"
+            className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl theme-surface-muted cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="mt-4 space-y-3">
-          <label className="flex items-center justify-between min-h-[44px] px-3 py-2 rounded-2xl bg-[#FAF4E7] border border-[#ECE1CA] cursor-pointer">
-            <span className="text-sm font-semibold text-[#3C2E20]">Sound effects</span>
+          {/* Theme Engine Selector: Botanical, Midnight Ocean, Sunset Desert */}
+          <div className="rounded-2xl theme-surface-muted border p-3 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-2 text-sm font-bold theme-ink">
+                <Palette className="w-4 h-4 text-[#E55A3C] dark:text-[#2BD4C5]" />
+                <span>Visual Theme</span>
+              </span>
+              <span className="text-xs font-semibold theme-ink-secondary">
+                {APP_THEMES.find((t) => t.id === settings.theme)?.name ?? 'Botanical'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Visual Theme">
+              {APP_THEMES.map((theme) => {
+                const selected = settings.theme === theme.id;
+                return (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => handleSelectTheme(theme.id)}
+                    className={`rounded-2xl p-2 border-2 text-left transition-all cursor-pointer flex flex-col gap-1.5 ${
+                      selected
+                        ? 'border-[#E55A3C] dark:border-[#2BD4C5] theme-surface shadow-sm'
+                        : 'border-transparent theme-surface opacity-85 hover:opacity-100'
+                    }`}
+                  >
+                    <div
+                      className="w-full h-9 rounded-xl border border-black/10 relative flex items-center justify-end p-1"
+                      style={{ background: theme.swatchGradient }}
+                    >
+                      {selected && (
+                        <span className="w-5 h-5 rounded-full bg-white text-[#2D2218] flex items-center justify-center shadow-xs">
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        </span>
+                      )}
+                    </div>
+                    <div className="font-display text-xs font-bold theme-ink leading-tight">
+                      {theme.name}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <label className="flex items-center justify-between min-h-[44px] px-3 py-2 rounded-2xl theme-surface-muted border cursor-pointer">
+            <span className="text-sm font-semibold theme-ink">Sound effects</span>
             <input
               type="checkbox"
               checked={settings.sfx}
@@ -641,11 +783,11 @@ export const SettingsModal: React.FC<{
             />
           </label>
 
-          {/* Vibration Toggle + Accessibility Intensity Slider */}
-          <div className="rounded-2xl bg-[#FAF4E7] border border-[#ECE1CA] px-3 py-2.5 space-y-2.5">
+          {/* Vibration Toggle + Intensity Slider */}
+          <div className="rounded-2xl theme-surface-muted border px-3 py-2.5 space-y-2.5">
             <label className="flex items-center justify-between min-h-[32px] cursor-pointer">
-              <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#3C2E20]">
-                <Vibrate className="w-4 h-4 text-[#C96A1B]" />
+              <span className="inline-flex items-center gap-2 text-sm font-semibold theme-ink">
+                <Vibrate className="w-4 h-4 text-[#C96A1B] dark:text-[#2BD4C5]" />
                 <span>Vibration feedback</span>
               </span>
               <input
@@ -657,13 +799,13 @@ export const SettingsModal: React.FC<{
             </label>
 
             <div
-              className={`pt-2 border-t border-[#E8DEC8] transition-opacity ${
+              className={`pt-2 border-t theme-border transition-opacity ${
                 settings.vibration ? 'opacity-100' : 'opacity-45'
               }`}
             >
-              <div className="flex items-center justify-between text-xs font-semibold text-[#6E5B47] mb-1.5 tabular-nums">
+              <div className="flex items-center justify-between text-xs font-semibold theme-ink-secondary mb-1.5 tabular-nums">
                 <label htmlFor="vibration-intensity-slider">Vibration intensity</label>
-                <span className="text-[#2D2218] font-bold">
+                <span className="theme-ink font-bold">
                   {intensityLabel} · {settings.vibrationIntensity}%
                 </span>
               </div>
@@ -679,7 +821,7 @@ export const SettingsModal: React.FC<{
                 aria-label="Adjust vibration feedback intensity"
                 className="w-full h-2 rounded-full accent-[#E55A3C] cursor-pointer disabled:cursor-not-allowed"
               />
-              <div className="mt-1 flex items-center justify-between text-[10px] font-medium text-[#8B765D]">
+              <div className="mt-1 flex items-center justify-between text-[10px] font-medium theme-ink-muted">
                 <span>Gentle</span>
                 <span>Balanced</span>
                 <span>Strong</span>
@@ -696,9 +838,9 @@ export const SettingsModal: React.FC<{
           ).map(([key, label]) => (
             <label
               key={key}
-              className="flex items-center justify-between min-h-[44px] px-3 py-2 rounded-2xl bg-[#FAF4E7] border border-[#ECE1CA] cursor-pointer"
+              className="flex items-center justify-between min-h-[44px] px-3 py-2 rounded-2xl theme-surface-muted border cursor-pointer"
             >
-              <span className="text-sm font-semibold text-[#3C2E20]">{label}</span>
+              <span className="text-sm font-semibold theme-ink">{label}</span>
               <input
                 type="checkbox"
                 checked={settings[key]}
@@ -708,12 +850,12 @@ export const SettingsModal: React.FC<{
             </label>
           ))}
 
-          <div className="flex items-center justify-between min-h-[44px] px-3 py-2 rounded-2xl bg-[#FAF4E7] border border-[#ECE1CA]">
-            <span className="text-sm font-semibold text-[#3C2E20]">Game mode</span>
+          <div className="flex items-center justify-between min-h-[44px] px-3 py-2 rounded-2xl theme-surface-muted border">
+            <span className="text-sm font-semibold theme-ink">Game mode</span>
             <select
               value={settings.mode}
               onChange={(e) => onUpdate({ ...settings, mode: e.target.value as GameMode })}
-              className="rounded-xl bg-[#FFFDF8] border border-[#DFD2B8] px-3 py-1.5 text-sm font-semibold text-[#2D2218]"
+              className="rounded-xl theme-surface border px-3 py-1.5 text-sm font-semibold"
             >
               <option value="relaxed">Relaxed</option>
               <option value="challenge">Challenge</option>
@@ -721,6 +863,8 @@ export const SettingsModal: React.FC<{
               <option value="master">Master</option>
             </select>
           </div>
+
+          <PWAInstallButton fullWidth />
         </div>
 
         <button

@@ -511,20 +511,40 @@ export function generateLevel(levelId: number, isDaily = false, dailyDate?: stri
     jarTargetColors.push(lockedColorId);
   }
 
+  // Compute realistic tight move limit directly from actual starting color runs in the board
+  let startingRuns = 0;
+  for (let i = 0; i < colorCount; i++) {
+    const t = finalTubes[i];
+    if (t.length === 0) continue;
+    startingRuns += 1;
+    for (let u = 1; u < t.length; u++) {
+      if (t[u] !== t[u - 1]) startingRuns += 1;
+    }
+  }
+  const extraRunsToSeparate = Math.max(colorCount * 2, startingRuns - colorCount);
+  const difficultyBuffer =
+    difficulty === 'Easy'
+      ? 4
+      : difficulty === 'Normal'
+      ? 3
+      : difficulty === 'Hard'
+      ? 3
+      : 2;
   const moveLimit = Math.max(
-    18,
-    colorCount * 6 + (difficulty === 'Easy' ? 6 : difficulty === 'Master' ? 12 : 9)
+    colorCount * 2 + 4,
+    Math.min(colorCount * 4 + 4, extraRunsToSeparate + difficultyBuffer + (hasColoredJar ? 2 : 0))
   );
+
   const timeLimit =
     difficulty === 'Easy'
-      ? 90
+      ? 60
       : difficulty === 'Normal'
-      ? 105
+      ? 75
       : difficulty === 'Hard'
-      ? 120
+      ? 90
       : difficulty === 'Expert'
-      ? 140
-      : 160;
+      ? 105
+      : 120;
 
   const allColorIds = Array.from({ length: colorCount }, (_, idx) => idx);
   const targetColorIds =
@@ -552,11 +572,62 @@ export function generateLevel(levelId: number, isDaily = false, dailyDate?: stri
   };
 }
 
-export function calculateStars(moves: number, moveLimit: number): number {
-  const ratio = moves / Math.max(1, moveLimit);
-  if (ratio <= 0.68) return 3;
-  if (ratio <= 0.86) return 2;
-  return 1;
+export interface LevelScoreBreakdown {
+  stars: number;
+  completeStar: boolean;
+  timeBalanceStar: boolean;
+  movesBalanceStar: boolean;
+  remainingTimeSec: number;
+  remainingMoves: number;
+  baseScore: number;
+  timeScore: number;
+  movesScore: number;
+  totalScore: number;
+}
+
+/**
+ * Exact 3-Star Policy & Score Conversion:
+ * - Star 1: Level Complete (always 1 star on clear)
+ * - Star 2: Time Balance (1 star if remaining time > 0)
+ * - Star 3: Moves Balance (1 star if remaining moves > 0)
+ * - Remaining time (×10 pts/sec) + remaining moves (×25 pts/move) convert directly into Level Score.
+ */
+export function evaluateLevelResult(
+  movesUsed: number,
+  moveBudget: number,
+  remainingTimeSec: number
+): LevelScoreBreakdown {
+  const safeRemainingTime = Math.max(0, Math.floor(remainingTimeSec));
+  const safeRemainingMoves = Math.max(0, Math.floor(moveBudget - movesUsed));
+
+  const completeStar = true;
+  const timeBalanceStar = safeRemainingTime > 0;
+  const movesBalanceStar = safeRemainingMoves > 0;
+
+  const stars =
+    (completeStar ? 1 : 0) + (timeBalanceStar ? 1 : 0) + (movesBalanceStar ? 1 : 0);
+
+  const baseScore = 100;
+  const timeScore = safeRemainingTime * 10;
+  const movesScore = safeRemainingMoves * 25;
+  const totalScore = baseScore + timeScore + movesScore;
+
+  return {
+    stars,
+    completeStar,
+    timeBalanceStar,
+    movesBalanceStar,
+    remainingTimeSec: safeRemainingTime,
+    remainingMoves: safeRemainingMoves,
+    baseScore,
+    timeScore,
+    movesScore,
+    totalScore,
+  };
+}
+
+export function calculateStars(moves: number, moveLimit: number, remainingTimeSec = 1): number {
+  return evaluateLevelResult(moves, moveLimit, remainingTimeSec).stars;
 }
 
 export function getLevelObjectiveText(level: number): string {

@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Crown, Lock, MapPin, Play, Star } from 'lucide-react';
-import { PlayerProgress } from '../types/game';
+import { FriendEntry, PlayerProgress } from '../types/game';
 import { getDifficultyForLevel, getWorldForLevel } from '../utils/levelGenerator';
-import { RssDropletEmblem, WorldChapterScenery } from './SceneryArtwork';
+import { WorldChapterScenery } from './SceneryArtwork';
 
 interface LevelJourneyMapProps {
   progress: PlayerProgress;
   maxUnlocked: number;
   visibleLimit: number;
+  focusLevel?: number | null;
   onSelectLevel: (level: number) => void;
   onLockedTap: (level: number) => void;
   onLoadMore: () => void;
@@ -16,8 +17,8 @@ interface LevelJourneyMapProps {
 
 interface PositionedNode {
   level: number;
-  xPercent: number; // 0..100
-  y: number; // px from top of map canvas
+  xPercent: number;
+  y: number;
   worldId: number;
   isMilestone: boolean;
 }
@@ -29,14 +30,11 @@ interface PositionedChapter {
   levelEnd: number;
 }
 
-const CHAPTER_HEIGHT = 96;
+const CHAPTER_HEIGHT = 88;
 const CHAPTER_GAP_TOP = 18;
-const FIRST_NODE_OFFSET = 58;
+const FIRST_NODE_OFFSET = 56;
 const ROW_STEP = 96;
 
-/**
- * Generates an organic winding S-curve path where every node sits dead-center on the SVG spline.
- */
 function buildMapLayout(visibleLimit: number) {
   const nodes: PositionedNode[] = [];
   const chapters: PositionedChapter[] = [];
@@ -57,9 +55,8 @@ function buildMapLayout(visibleLimit: number) {
       cursorY += CHAPTER_HEIGHT + FIRST_NODE_OFFSET;
     }
 
-    // Smooth S-curve oscillating comfortably between 21% and 79%
     const phase = (level - 1) * 0.78;
-    const xPercent = 50 + Math.sin(phase) * 29;
+    const xPercent = 50 + Math.sin(phase) * 28;
 
     nodes.push({
       level,
@@ -75,7 +72,7 @@ function buildMapLayout(visibleLimit: number) {
   return {
     nodes,
     chapters,
-    totalHeight: cursorY + 32,
+    totalHeight: cursorY + 36,
   };
 }
 
@@ -83,12 +80,13 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
   progress,
   maxUnlocked,
   visibleLimit,
+  focusLevel,
   onSelectLevel,
   onLockedTap,
   onLoadMore,
   reduceMotion,
 }) => {
-  const currentNodeRef = useRef<HTMLButtonElement | null>(null);
+  const nodeRefs = useRef<Map<number, HTMLButtonElement | null>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   const { nodes, chapters, totalHeight } = useMemo(
@@ -96,29 +94,42 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
     [visibleLimit]
   );
 
-  // Smoothly scroll the current playable level into comfortable view on initial mount
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (currentNodeRef.current) {
-        currentNodeRef.current.scrollIntoView({
-          behavior: reduceMotion ? 'auto' : 'smooth',
-          block: 'center',
-        });
-      }
-    }, 120);
-    return () => window.clearTimeout(timer);
-  }, [reduceMotion]);
+  // Map friends by their current level so friend badges appear directly on the winding map
+  const friendsByLevel = useMemo(() => {
+    const map = new Map<number, FriendEntry[]>();
+    progress.friends.forEach((friend) => {
+      const list = map.get(friend.level) ?? [];
+      list.push(friend);
+      map.set(friend.level, list);
+    });
+    return map;
+  }, [progress.friends]);
 
-  const scrollToCurrent = () => {
-    if (currentNodeRef.current) {
-      currentNodeRef.current.scrollIntoView({
+  const scrollToLevel = (targetLv: number) => {
+    const el = nodeRefs.current.get(targetLv);
+    if (el) {
+      el.scrollIntoView({
         behavior: reduceMotion ? 'auto' : 'smooth',
         block: 'center',
       });
     }
   };
 
-  // Build individual smooth cubic Bezier segments so completed/unlocked segments glow warmly
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      scrollToLevel(progress.currentLevel);
+    }, 100);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduceMotion]);
+
+  useEffect(() => {
+    if (focusLevel && focusLevel > 0) {
+      scrollToLevel(focusLevel);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusLevel]);
+
   const segments = useMemo(() => {
     const result: {
       key: string;
@@ -154,74 +165,36 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
 
   return (
     <section
-      aria-label="Level Progression Journey"
-      className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-[#FFFDF6]/72 via-[#FBF3DF]/66 to-[#F4E9CF]/70 backdrop-blur-xs border border-[#E6DAC0] shadow-[0_14px_38px_-14px_rgba(110,85,48,0.22)]"
+      aria-label="Level Progression Map"
+      className="relative rounded-3xl overflow-hidden bg-transparent border theme-border shadow-[0_14px_38px_-14px_rgba(24,18,12,0.24)] flex flex-col h-full"
     >
-      {/* Journey Map Sticky Header Bar */}
-      <div className="sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-3 bg-[#FFFDF8]/92 backdrop-blur-md border-b border-[#EADEC5]">
+      {/* Compact Transparent Glass Map Header */}
+      <div className="sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-2.5 theme-surface-glass backdrop-blur-md border-b">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-[#7D6852] truncate">
+          <p className="text-[11px] font-semibold theme-ink-secondary truncate">
             {currentWorld.subtitle}
           </p>
-          <h2 className="font-display text-lg sm:text-xl font-bold text-[#2D2218] truncate leading-tight">
+          <h2 className="font-display text-lg sm:text-xl font-bold theme-ink truncate leading-tight">
             {currentWorld.name}
           </h2>
         </div>
 
         <button
           type="button"
-          onClick={scrollToCurrent}
-          className="inline-flex items-center gap-1.5 min-h-[40px] px-3.5 py-2 rounded-xl bg-[#F7EBD2] hover:bg-[#F0DFBA] text-[#5C4327] text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#E55A3C]"
+          onClick={() => scrollToLevel(progress.currentLevel)}
+          className="inline-flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 rounded-xl theme-surface-muted border text-xs font-bold transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#E55A3C]"
         >
-          <MapPin className="w-3.5 h-3.5 text-[#E55A3C]" />
+          <MapPin className="w-3.5 h-3.5 text-[#E55A3C] dark:text-[#2BD4C5]" />
           <span>Level {progress.currentLevel}</span>
         </button>
       </div>
 
-      {/* Scrollable Winding Map Canvas */}
+      {/* Transparent Scrollable Winding Map Canvas so Full-Screen Theme Scenery Shines Behind */}
       <div
         ref={scrollContainerRef}
-        className="relative w-full overflow-y-auto overflow-x-hidden max-h-[68vh] sm:max-h-[72vh] lg:max-h-[calc(100vh-152px)] scroll-smooth"
+        className="relative flex-1 w-full overflow-y-auto overflow-x-hidden min-h-[58dvh] max-h-[calc(100dvh-196px)] lg:max-h-[calc(100dvh-132px)] scroll-smooth bg-white/10 dark:bg-black/15"
       >
-        <div
-          className="relative w-full"
-          style={{ height: `${totalHeight}px` }}
-        >
-          {/* Subtle Warm Botanical Scenery Decorations along the margins */}
-          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-            {nodes
-              .filter((_, idx) => idx % 3 === 1)
-              .map((node) => {
-                const placeRight = node.xPercent < 50;
-                const world = getWorldForLevel(node.level);
-                return (
-                  <div
-                    key={`prop-${node.level}`}
-                    className={`absolute ${reduceMotion ? '' : 'animate-drift'}`}
-                    style={{
-                      top: `${node.y - 24}px`,
-                      left: placeRight ? '80%' : '8%',
-                    }}
-                  >
-                    <svg width="56" height="48" viewBox="0 0 56 48" fill="none">
-                      <ellipse cx="28" cy="36" rx="20" ry="8" fill={world.palette.hillNear} opacity="0.55" />
-                      <path
-                        d="M28 36 C20 30 16 20 22 14 C27 18 29 27 28 36 Z"
-                        fill={world.palette.accent}
-                        opacity="0.32"
-                      />
-                      <path
-                        d="M28 36 C36 31 41 22 36 16 C31 20 29 28 28 36 Z"
-                        fill={world.palette.accent}
-                        opacity="0.45"
-                      />
-                      <circle cx="28" cy="14" r="4.5" fill="#F4B731" opacity="0.7" />
-                    </svg>
-                  </div>
-                );
-              })}
-          </div>
-
+        <div className="relative w-full" style={{ height: `${totalHeight}px` }}>
           {/* World Chapter Scenery Banners */}
           {chapters.map((chapter) => {
             const world = getWorldForLevel(chapter.levelStart);
@@ -232,63 +205,59 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
             return (
               <div
                 key={`world-${chapter.worldId}`}
-                className="absolute left-3 right-3 sm:left-5 sm:right-5 rounded-2xl overflow-hidden border border-[#E4D6B8] shadow-[0_6px_18px_-8px_rgba(110,85,48,0.22)]"
+                className="absolute left-3 right-3 sm:left-5 sm:right-5 rounded-2xl overflow-hidden border theme-border shadow-[0_6px_18px_-8px_rgba(30,22,12,0.28)]"
                 style={{ top: `${chapter.y}px`, height: `${CHAPTER_HEIGHT}px` }}
               >
                 <WorldChapterScenery world={world} />
                 <div className="relative z-10 h-full px-4 sm:px-5 flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs font-semibold text-[#6F583D] tabular-nums">
+                    <div className="text-xs font-semibold text-[#5E472D] tabular-nums">
                       World {world.id} · Levels {chapter.levelStart}–{chapter.levelEnd}
                     </div>
                     <h3 className="font-display text-lg sm:text-xl font-bold text-[#2D2218]">
                       {world.name}
                     </h3>
                   </div>
-                  <div className="text-right shrink-0 bg-[#FFFDF8]/88 backdrop-blur-xs px-3 py-1.5 rounded-xl border border-[#E5D7B9]">
+                  <div className="text-right shrink-0 bg-[#FFFDF8]/90 backdrop-blur-xs px-3 py-1.5 rounded-xl border border-[#E5D7B9]">
                     <div className="font-display text-sm font-bold text-[#2D2218] tabular-nums">
                       {clearedInWorld} / 20
                     </div>
-                    <div className="text-[11px] font-medium text-[#755F48]">Cleared</div>
                   </div>
                 </div>
               </div>
             );
           })}
 
-          {/* Winding SVG Path Connecting Every Level Node Accurately */}
+          {/* Winding SVG Path Connecting Every Level Node */}
           <svg
             viewBox={`0 0 1000 ${totalHeight}`}
             preserveAspectRatio="none"
             className="absolute inset-0 w-full h-full pointer-events-none"
             aria-hidden="true"
           >
-            {/* Base warm travertine trail bed */}
             {segments.map((seg) => (
               <path
                 key={`bed-${seg.key}`}
                 d={seg.d}
                 fill="none"
-                stroke="#E5D8BE"
-                strokeWidth="22"
+                stroke="rgba(45, 34, 24, 0.28)"
+                strokeWidth="24"
                 strokeLinecap="round"
               />
             ))}
 
-            {/* Inner path surface */}
             {segments.map((seg) => (
               <path
                 key={`inner-${seg.key}`}
                 d={seg.d}
                 fill="none"
-                stroke={seg.completed ? '#F6B838' : seg.unlocked ? '#F49D54' : '#EFE6D2'}
+                stroke={seg.completed ? '#F6B838' : seg.unlocked ? '#F49D54' : 'rgba(255, 250, 238, 0.72)'}
                 strokeWidth={seg.completed || seg.unlocked ? '12' : '10'}
                 strokeDasharray={seg.unlocked || seg.completed ? undefined : '10 12'}
                 strokeLinecap="round"
               />
             ))}
 
-            {/* Warm golden center sheen on completed trails */}
             {segments
               .filter((seg) => seg.completed)
               .map((seg) => (
@@ -304,13 +273,16 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
               ))}
           </svg>
 
-          {/* Interactive Tactile Level Nodes */}
+          {/* Interactive Tactile Level Nodes + Friend Level Avatars */}
           {nodes.map((node) => {
             const isCompleted = Boolean(progress.completedLevels[String(node.level)]);
             const isCurrent = node.level === progress.currentLevel;
             const isLocked = node.level > maxUnlocked;
             const stars = Number(progress.levelStars[String(node.level)]) || (isCompleted ? 1 : 0);
+            const levelScore = Number(progress.levelScores?.[String(node.level)]) || 0;
             const difficulty = getDifficultyForLevel(node.level);
+            const nodeFriends = friendsByLevel.get(node.level) ?? [];
+            const placeFriendsLeft = node.xPercent > 55;
 
             const handlePress = () => {
               if (isLocked) {
@@ -328,18 +300,22 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
                   left: `${node.xPercent}%`,
                   top: `${node.y}px`,
                   transform: 'translate(-50%, -50%)',
-                  zIndex: isCurrent ? 15 : 10,
+                  zIndex: isCurrent ? 18 : nodeFriends.length > 0 ? 14 : 10,
                 }}
               >
-                {/* Floating RSS Player Pin above Current Playable Level */}
+                {/* Floating Game Logo Pin above Current Playable Level */}
                 {isCurrent && (
                   <div
                     className={`absolute -top-12 flex flex-col items-center pointer-events-none ${
                       reduceMotion ? '' : 'animate-float-pin'
                     }`}
                   >
-                    <div className="p-0.5 rounded-full bg-[#FFFDF8] shadow-md border-2 border-[#E55A3C]">
-                      <RssDropletEmblem className="w-8 h-8" />
+                    <div className="p-0.5 rounded-full bg-white/95 shadow-md border-2 border-[#E55A3C]">
+                      <img
+                        src="/logo.png"
+                        alt="Current level marker"
+                        className="w-8 h-8 object-contain"
+                      />
                     </div>
                     <div className="w-2.5 h-2.5 -mt-1 rotate-45 bg-[#E55A3C]" />
                   </div>
@@ -353,8 +329,37 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
                   />
                 )}
 
+                {/* Friends currently on this Level shown directly beside the Map Node */}
+                {nodeFriends.length > 0 && (
+                  <div
+                    className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none ${
+                      placeFriendsLeft ? 'right-[calc(100%+10px)] flex-row-reverse' : 'left-[calc(100%+10px)]'
+                    }`}
+                  >
+                    {nodeFriends.slice(0, 2).map((friend) => (
+                      <div
+                        key={friend.id}
+                        title={`${friend.name} · Level ${friend.level}`}
+                        className="flex items-center gap-1 rounded-full theme-surface-strong border px-1.5 py-0.5 shadow-md backdrop-blur-sm"
+                      >
+                        <span
+                          className="w-6 h-6 rounded-full border border-white text-white font-display text-[10px] font-bold flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: friend.avatarColor }}
+                        >
+                          {friend.name.slice(0, 2).toUpperCase()}
+                        </span>
+                        <span className="text-[11px] font-bold theme-ink whitespace-nowrap pr-1">
+                          {friend.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <button
-                  ref={isCurrent ? currentNodeRef : undefined}
+                  ref={(el) => {
+                    nodeRefs.current.set(node.level, el);
+                  }}
                   type="button"
                   onClick={handlePress}
                   aria-label={
@@ -362,7 +367,7 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
                       ? `Level ${node.level}, ${difficulty}, locked`
                       : isCurrent
                       ? `Play current Level ${node.level}, ${difficulty}`
-                      : `Replay completed Level ${node.level}, ${stars} of 3 stars`
+                      : `Replay completed Level ${node.level}, ${stars} of 3 stars, score ${levelScore}`
                   }
                   className={`relative flex flex-col items-center justify-center rounded-full border-[3px] transition-transform duration-150 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#E55A3C] ${
                     isCurrent
@@ -372,11 +377,10 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
                           node.isMilestone ? 'node-milestone-complete' : 'node-complete'
                         } border-[#FFFDF7] text-white cursor-pointer hover:scale-105 active:scale-95`
                       : isLocked
-                      ? 'w-[56px] h-[56px] node-locked border-[#F9F4E8] text-[#8B7B67] cursor-not-allowed active:scale-95'
+                      ? 'w-[56px] h-[56px] node-locked border-[#F9F4E8] dark:border-[#2A587A] text-[#7D6C58] dark:text-[#98C2DC] cursor-not-allowed active:scale-95'
                       : 'w-[62px] h-[62px] bg-gradient-to-b from-[#FCE1A6] to-[#E9A93B] border-[#FFFDF7] text-[#3F290C] shadow-[0_5px_0_#B37815] cursor-pointer hover:scale-105 active:scale-95'
                   }`}
                 >
-                  {/* Milestone Crown Indicator */}
                   {node.isMilestone && !isCurrent && (
                     <span
                       aria-hidden="true"
@@ -433,23 +437,23 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
                   )}
                 </button>
 
-                {/* Difficulty cue underneath current level */}
-                {!isCompleted && isCurrent ? (
-                  <span className="mt-2 px-2.5 py-0.5 rounded-lg bg-[#2D2218] text-[#FFFDF8] text-[11px] font-semibold shadow-sm whitespace-nowrap">
-                    Current · {difficulty}
+                {/* Completed Level Score displayed neatly under the node */}
+                {isCompleted && (
+                  <span className="mt-1 px-2 py-0.5 rounded-lg theme-surface-strong border text-[10px] font-bold theme-ink tabular-nums shadow-xs whitespace-nowrap">
+                    {levelScore > 0 ? `${levelScore.toLocaleString()} pts` : `${stars}★`}
                   </span>
-                ) : null}
+                )}
               </div>
             );
           })}
         </div>
 
-        {/* Load More Levels Footer */}
+        {/* Load More Levels Action */}
         <div className="px-4 pb-6 pt-2 flex justify-center">
           <button
             type="button"
             onClick={onLoadMore}
-            className="min-h-[44px] px-5 py-2.5 rounded-2xl bg-[#FFFDF8] hover:bg-[#F7EEDB] border border-[#DFD1B4] text-[#4C3A26] text-sm font-semibold shadow-xs transition-colors cursor-pointer"
+            className="min-h-[42px] px-5 py-2 rounded-2xl theme-surface-strong border text-xs sm:text-sm font-bold shadow-xs transition-colors cursor-pointer"
           >
             Load More Levels ({visibleLimit + 1}–{visibleLimit + 60})
           </button>

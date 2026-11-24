@@ -9,10 +9,12 @@ import {
   Trophy,
   User,
 } from 'lucide-react';
+import { AnimatedDashboardBackdrop } from './components/AnimatedDashboardBackdrop';
 import { DailyRewardModal } from './components/DailyRewardModal';
 import { DashboardScreen } from './components/DashboardScreen';
+import { LivesModal } from './components/LivesModal';
+import { OfflineIndicator } from './components/PWAInstallButton';
 import { PuzzleScreen } from './components/PuzzleScreen';
-import { RssDropletEmblem } from './components/SceneryArtwork';
 import {
   GardenScreen,
   ProfileScreen,
@@ -21,20 +23,26 @@ import {
 } from './components/SecondaryScreens';
 import { AppScreen, CalculatedDailyReward, GameSettings, PlayerProgress } from './types/game';
 import { ACHIEVEMENTS, GARDEN_PLANTS } from './utils/levelGenerator';
+import { initTelegramMiniApp, shareGameOrLifeRequest } from './utils/platform';
 import { soundFx } from './utils/sound';
 import {
+  addFriendEntry,
+  addOneLife,
   applyDailyLoginClaim,
+  claimLifeFromFriend,
+  deductOneLife,
   formatDateKey,
-  getDailyLoginStatus,
   getMaxUnlockedLevel,
-  getOffsetDateKey,
   loadProgress,
   loadSettings,
+  MAX_FRIEND_LIVES_PER_DAY,
   MAX_STANDARD_LIVES,
   recomputeLives,
   saveProgress,
   saveSettings,
+  sendLifeToFriend,
 } from './utils/storage';
+import { applyThemeToDocument } from './utils/themes';
 
 export default function App() {
   const [progress, setProgress] = useState<PlayerProgress>(() => loadProgress());
@@ -45,14 +53,35 @@ export default function App() {
   const [visibleMapLimit, setVisibleMapLimit] = useState<number>(() =>
     Math.max(40, getMaxUnlockedLevel(loadProgress()) + 24)
   );
-  const [referenceDateKey, setReferenceDateKey] = useState<string>(() => formatDateKey());
   const [dailyModalOpen, setDailyModalOpen] = useState(false);
   const [justClaimedTier, setJustClaimedTier] = useState<CalculatedDailyReward | null>(null);
+  const [livesModalOpen, setLivesModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Real calendar date only (future preview/claim removed)
+  const todayKey = formatDateKey();
+
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
+  }, []);
+
+  // Apply selected theme globally (CSS variables, .dark class, meta theme-color, Telegram chrome)
+  useEffect(() => {
+    applyThemeToDocument(settings.theme);
+  }, [settings.theme]);
+
+  // Initialize Telegram Mini App SDK when running inside Telegram
+  useEffect(() => {
+    const { userName } = initTelegramMiniApp();
+    if (userName) {
+      setProgress((prev) => {
+        if (prev.playerName !== 'Guest') return prev;
+        const updated = { ...prev, playerName: userName };
+        saveProgress(updated);
+        return updated;
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -60,21 +89,6 @@ export default function App() {
     const t = window.setTimeout(() => setToastMessage(null), 3200);
     return () => window.clearTimeout(t);
   }, [toastMessage]);
-
-  // First-visit-each-day detection when opening the dashboard:
-  // Automatically surfaces the Daily Login Reward sheet once per calendar day if unclaimed.
-  useEffect(() => {
-    if (screen !== 'home') return;
-    const status = getDailyLoginStatus(progress, referenceDateKey);
-    if (status.canClaim) {
-      const seenSessionKey = `rss-daily-prompted-${referenceDateKey}`;
-      if (!sessionStorage.getItem(seenSessionKey)) {
-        sessionStorage.setItem(seenSessionKey, '1');
-        setJustClaimedTier(null);
-        setDailyModalOpen(true);
-      }
-    }
-  }, [screen, progress, referenceDateKey]);
 
   const maxUnlocked = getMaxUnlockedLevel(progress);
   const lifeInfo = recomputeLives(progress.lifeState);
@@ -85,7 +99,7 @@ export default function App() {
   };
 
   const handleClaimDailyReward = useCallback(() => {
-    const result = applyDailyLoginClaim(progress, referenceDateKey);
+    const result = applyDailyLoginClaim(progress, todayKey);
     if (!result) {
       showToast('Today’s daily login reward has already been claimed.');
       return;
@@ -106,10 +120,17 @@ export default function App() {
       parts.push(`+${result.granted.lives} bonus ${result.granted.lives === 1 ? 'life' : 'lives'}`);
     }
     showToast(`Day ${result.newStreak} login bonus claimed: ${parts.join(' & ')}!`);
-  }, [progress, referenceDateKey, settings.sfx, showToast]);
+  }, [progress, todayKey, settings.sfx, showToast]);
 
   const openLevel = useCallback(
     (level: number, isDaily = false) => {
+      // Daily Challenge can only be played once per calendar day after completion
+      if (isDaily && progress.dailyClears[todayKey]) {
+        soundFx.locked(settings.sfx);
+        showToast('Today’s Daily Challenge is already complete! Come back tomorrow.');
+        return;
+      }
+
       if (!isDaily && level > maxUnlocked) {
         soundFx.locked(settings.sfx);
         showToast(`Complete Level ${maxUnlocked} to unlock Level ${level}.`);
@@ -120,7 +141,8 @@ export default function App() {
       const livesNow = recomputeLives(progress.lifeState);
       if (!isDaily && !isCompleted && livesNow.count <= 0) {
         soundFx.locked(settings.sfx);
-        showToast('No lives left for a new level. Replay a completed level or claim a bonus life.');
+        setLivesModalOpen(true);
+        showToast('No lives left. Wait for refill, watch an ad, or claim from friends.');
         return;
       }
 
@@ -130,7 +152,15 @@ export default function App() {
       setScreen('play');
       window.scrollTo({ top: 0, behavior: 'auto' });
     },
-    [maxUnlocked, progress.completedLevels, progress.lifeState, settings.sfx, showToast]
+    [
+      maxUnlocked,
+      progress.completedLevels,
+      progress.dailyClears,
+      progress.lifeState,
+      settings.sfx,
+      showToast,
+      todayKey,
+    ]
   );
 
   const handleLockedTap = useCallback(
@@ -146,21 +176,21 @@ export default function App() {
       if (progress.completedLevels[String(levelId)]) return true;
       const livesNow = recomputeLives(progress.lifeState);
       if (livesNow.count <= 0) return false;
-      const nextCount = livesNow.count - 1;
-      const nextRefillStart =
-        nextCount >= MAX_STANDARD_LIVES
-          ? 0
-          : livesNow.lastRefillAt || Date.now();
-      const updated: PlayerProgress = {
-        ...progress,
-        lifeState: {
-          count: nextCount,
-          lastRefillAt: nextRefillStart,
-        },
-      };
+      const { updated } = deductOneLife(progress);
       setProgress(updated);
-      saveProgress(updated);
       return true;
+    },
+    [progress]
+  );
+
+  const handleLoseLifeOnFailure = useCallback(
+    (levelId: number): number => {
+      if (progress.completedLevels[String(levelId)]) {
+        return recomputeLives(progress.lifeState).count;
+      }
+      const { updated, remaining } = deductOneLife(progress);
+      setProgress(updated);
+      return remaining;
     },
     [progress]
   );
@@ -178,6 +208,7 @@ export default function App() {
       setProgress((prev) => {
         const nextCompleted = { ...prev.completedLevels };
         const nextStars = { ...prev.levelStars };
+        const nextScores = { ...prev.levelScores };
         const nextDailyClears = { ...prev.dailyClears };
 
         let levelsCleared = prev.levelsCleared;
@@ -196,6 +227,7 @@ export default function App() {
           nextCompleted[key] = true;
           if (firstClear) levelsCleared += 1;
           nextStars[key] = Math.max(Number(nextStars[key]) || 0, payload.stars);
+          nextScores[key] = Math.max(Number(nextScores[key]) || 0, payload.scoreEarned);
           const unlockedNext = payload.levelId + 1;
           bestLevel = Math.max(bestLevel, unlockedNext);
           if (payload.levelId >= currentLevel) {
@@ -221,6 +253,7 @@ export default function App() {
           levelsCleared,
           completedLevels: nextCompleted,
           levelStars: nextStars,
+          levelScores: nextScores,
           coins: prev.coins + payload.coinsEarned,
           score: newScore,
           bestScore: Math.max(prev.bestScore, newScore),
@@ -263,41 +296,68 @@ export default function App() {
   }, [progress, settings.sfx, showToast]);
 
   const handleGrantAdLife = useCallback(() => {
-    setProgress((prev) => {
-      const livesNow = recomputeLives(prev.lifeState);
-      const nextCount = livesNow.count + 1;
-      const updated: PlayerProgress = {
-        ...prev,
-        lifeState: {
-          count: nextCount,
-          lastRefillAt: nextCount >= MAX_STANDARD_LIVES ? 0 : livesNow.lastRefillAt,
-        },
-      };
-      saveProgress(updated);
-      return updated;
-    });
-    showToast('+1 Life earned');
-  }, [showToast]);
+    setProgress((prev) => addOneLife(prev).updated);
+    soundFx.reward(settings.sfx);
+    showToast('+1 Life earned from rewarded ad!');
+  }, [settings.sfx, showToast]);
 
-  const handleShare = useCallback(() => {
+  const handleSendFriendLife = useCallback(
+    (friendId: string) => {
+      const res = sendLifeToFriend(progress, friendId, todayKey);
+      if (!res) {
+        soundFx.locked(settings.sfx);
+        showToast(`Daily limit reached (${MAX_FRIEND_LIVES_PER_DAY} lives/day per friend).`);
+        return;
+      }
+      setProgress(res.updated);
+      soundFx.reward(settings.sfx);
+      showToast(
+        `Sent +1 life to ${res.friendName} (${res.sentToday}/${MAX_FRIEND_LIVES_PER_DAY} today).`
+      );
+    },
+    [progress, settings.sfx, showToast, todayKey]
+  );
+
+  const handleClaimFriendLife = useCallback(
+    (friendId: string) => {
+      const res = claimLifeFromFriend(progress, friendId, todayKey);
+      if (!res) {
+        soundFx.locked(settings.sfx);
+        showToast(`Already claimed ${MAX_FRIEND_LIVES_PER_DAY} lives from this friend today.`);
+        return;
+      }
+      setProgress(res.updated);
+      soundFx.reward(settings.sfx);
+      showToast(
+        `Claimed +1 life from ${res.friendName} (${res.receivedToday}/${MAX_FRIEND_LIVES_PER_DAY} today).`
+      );
+    },
+    [progress, settings.sfx, showToast, todayKey]
+  );
+
+  const handleAddFriend = useCallback(
+    (name: string, level: number) => {
+      const updated = addFriendEntry(progress, name, level);
+      setProgress(updated);
+      soundFx.tap(settings.sfx);
+      showToast(`Added ${name} (Level ${level}) to Friends Leaderboard!`);
+    },
+    [progress, settings.sfx, showToast]
+  );
+
+  const handleShare = useCallback(async () => {
     const url = 'https://rssapps.net/games/liquid-flow/';
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(url).catch(() => {});
-    }
-    showToast('RSS Liquid Flow link copied to clipboard.');
-  }, [showToast]);
+    const text = `I'm on Level ${progress.currentLevel} in RSS Liquid Flow! Join me and share lives:`;
+    const ok = await shareGameOrLifeRequest(text, url);
+    showToast(ok ? 'RSS Liquid Flow invite shared!' : 'Copy link: https://rssapps.net/games/liquid-flow/');
+  }, [progress.currentLevel, showToast]);
 
-  const handleSimulateNextDay = useCallback(() => {
-    const nextDate = getOffsetDateKey(referenceDateKey, 1);
-    setReferenceDateKey(nextDate);
-    setJustClaimedTier(null);
-    setScreen('home');
-    setDailyModalOpen(true);
-    showToast(`Previewing daily login for ${nextDate}.`);
-  }, [referenceDateKey, showToast]);
-
-  const navItems: { id: AppScreen; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: 'home', label: 'Home', icon: Home },
+  const navItems: {
+    id: AppScreen;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }[] = [
+    { id: 'home', label: 'Map', icon: Home },
     { id: 'play', label: 'Play', icon: Play },
     { id: 'garden', label: 'Garden', icon: Sprout },
     { id: 'rewards', label: 'Rewards', icon: Trophy },
@@ -318,29 +378,36 @@ export default function App() {
 
   return (
     <div
-      className={`bg-[#FAF6EC] text-[#2D2218] flex flex-col ${
-        isPlaying ? 'h-[100dvh] overflow-hidden' : 'min-h-screen'
+      className={`relative bg-transparent theme-ink flex flex-col ${
+        isPlaying ? 'h-[100dvh] overflow-hidden' : 'min-h-[100dvh]'
       }`}
     >
-      {/* Responsive Top Navigation Bar (Strict 3-zone contract on desktop, compact 56px on mobile) */}
-      <header className="sticky top-0 z-30 h-14 sm:h-16 bg-[#FFFDF8]/95 backdrop-blur-md border-b border-[#E6DAC0]">
-        <div className="max-w-7xl mx-auto h-full px-3 sm:px-6 flex items-center justify-between gap-4 sm:gap-8">
-          {/* Zone 1: Single-line Brand Wordmark */}
+      {/* Full-Screen Responsive Live Theme Backdrop (zero gaps across all viewports) */}
+      <AnimatedDashboardBackdrop themeId={settings.theme} reduceMotion={settings.reduceMotion} />
+
+      {/* Top Navigation Bar: Transparent Logo left · Nav center · Lives, Coins & Settings top-right */}
+      <header className="sticky top-0 z-30 h-14 sm:h-16 theme-surface-strong backdrop-blur-md border-b">
+        <div className="max-w-7xl mx-auto h-full px-3 sm:px-6 flex items-center justify-between gap-3 sm:gap-6">
+          {/* Brand Logo + Wordmark */}
           <button
             type="button"
             onClick={() => handleNavClick('home')}
-            className="flex items-center gap-2.5 text-left whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#E55A3C] rounded-xl"
+            className="flex items-center gap-2 text-left whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#E55A3C] rounded-xl"
           >
-            <RssDropletEmblem className="w-8 h-8 sm:w-9 sm:h-9 shrink-0" />
-            <span className="font-display text-lg sm:text-xl font-bold tracking-tight text-[#2D2218]">
+            <img
+              src="/logo.png"
+              alt="RSS Liquid Flow"
+              className="w-9 h-9 sm:w-10 sm:h-10 object-contain shrink-0 drop-shadow-xs"
+            />
+            <span className="font-display text-base sm:text-xl font-bold tracking-tight theme-ink">
               RSS Liquid Flow
             </span>
           </button>
 
-          {/* Zone 2: Clean Typography Desktop Nav Links */}
+          {/* Desktop Navigation Links */}
           <nav
             aria-label="Primary navigation"
-            className="hidden lg:flex items-center gap-7 text-sm font-semibold text-[#6B5742]"
+            className="hidden lg:flex items-center gap-7 text-sm font-semibold theme-ink-secondary"
           >
             {navItems.map((item) => {
               const active = screen === item.id;
@@ -351,8 +418,8 @@ export default function App() {
                   onClick={() => handleNavClick(item.id)}
                   className={`py-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer border-b-2 ${
                     active
-                      ? 'text-[#2D2218] border-[#E55A3C]'
-                      : 'border-transparent hover:text-[#2D2218] hover:border-[#D9C6A3]'
+                      ? 'theme-ink border-[#E55A3C] dark:border-[#2BD4C5]'
+                      : 'border-transparent hover:opacity-90'
                   }`}
                 >
                   {item.label}
@@ -361,64 +428,54 @@ export default function App() {
             })}
           </nav>
 
-          {/* Zone 3: Compact Mobile Wallet + Primary Action on Desktop */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            <div className="flex lg:hidden items-center gap-3 text-xs font-bold tabular-nums">
-              <span className="inline-flex items-center gap-1 text-[#9A5F0A]">
-                <Coins className="w-4 h-4 text-[#E59B14]" />
-                {progress.coins}
-              </span>
-              <span className="inline-flex items-center gap-1 text-[#B82843]">
-                <Heart className="w-4 h-4 text-[#D93D59] fill-[#D93D59]" />
-                {lifeInfo.count}
-              </span>
+          {/* Top-Right Corner: Lives, Coins & Settings */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setLivesModalOpen(true)}
+              aria-label={`Lives: ${lifeInfo.count}. Open lives and refill options`}
+              className="min-h-[38px] px-2.5 sm:px-3 py-1 rounded-xl bg-[#FFE7EC] dark:bg-[#3A1E33] border border-[#F3BCC8] dark:border-[#6A3256] inline-flex items-center gap-1.5 text-xs sm:text-sm font-display font-bold text-[#B82843] dark:text-[#FF8AA1] tabular-nums cursor-pointer hover:opacity-95"
+            >
+              <Heart className="w-4 h-4 fill-current" />
+              <span>{lifeInfo.count}</span>
+            </button>
+
+            <div
+              aria-label={`Coins: ${progress.coins}`}
+              className="min-h-[38px] px-2.5 sm:px-3 py-1 rounded-xl bg-[#FFF6DC] dark:bg-[#332B14] border border-[#ECCB82] dark:border-[#6A5624] inline-flex items-center gap-1.5 text-xs sm:text-sm font-display font-bold text-[#9A5F0A] dark:text-[#F5BC38] tabular-nums"
+            >
+              <Coins className="w-4 h-4 text-[#E59B14]" />
+              <span>{progress.coins.toLocaleString()}</span>
             </div>
 
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              aria-label="Open settings"
-              className="lg:hidden min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-[#F6EEDB] text-[#4C3A26] cursor-pointer"
+              aria-label="Open settings and themes"
+              className="min-w-[38px] min-h-[38px] flex items-center justify-center rounded-xl theme-surface-muted border theme-ink cursor-pointer hover:opacity-90"
             >
               <Settings className="w-4 h-4" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => openLevel(progress.currentLevel, false)}
-              className="hidden lg:inline-flex items-center gap-1.5 min-h-[40px] px-4 py-2 rounded-xl btn-tactile-coral text-white font-display text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <Play className="w-4 h-4 fill-current" />
-              <span>Play Level {progress.currentLevel}</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Active Screen */}
-      <main className={`flex-1 ${isPlaying ? 'min-h-0 overflow-hidden' : ''}`}>
+      <main className={`relative z-10 flex-1 ${isPlaying ? 'min-h-0 overflow-hidden' : ''}`}>
         {screen === 'home' && (
           <DashboardScreen
             progress={progress}
             maxUnlocked={maxUnlocked}
             visibleLimit={visibleMapLimit}
-            referenceDateKey={referenceDateKey}
+            referenceDateKey={todayKey}
             reduceMotion={settings.reduceMotion}
             onPlayCurrent={() => openLevel(progress.currentLevel, false)}
             onSelectLevel={(lv) => openLevel(lv, false)}
             onLockedTap={handleLockedTap}
             onLoadMore={() => setVisibleMapLimit((prev) => prev + 60)}
-            onPlayDaily={() => openLevel(progress.currentLevel, true)}
-            onOpenDailyReward={() => {
-              setJustClaimedTier(null);
-              setDailyModalOpen(true);
-            }}
-            onClaimDailyRewardInline={() => {
-              handleClaimDailyReward();
-              setDailyModalOpen(true);
-            }}
-            onRefillLifeWithCoins={handleRefillLifeWithCoins}
-            onNavigate={handleNavClick}
+            onSendFriendLife={handleSendFriendLife}
+            onClaimFriendLife={handleClaimFriendLife}
+            onAddFriend={handleAddFriend}
           />
         )}
 
@@ -426,18 +483,20 @@ export default function App() {
           <PuzzleScreen
             levelId={activePlayLevel}
             isDaily={activeIsDaily}
-            dailyDate={activeIsDaily ? referenceDateKey : undefined}
+            dailyDate={activeIsDaily ? todayKey : undefined}
             progress={progress}
             sfxEnabled={settings.sfx}
             vibrationEnabled={settings.vibration}
             vibrationIntensity={settings.vibrationIntensity}
             showHints={settings.showHints}
             reduceMotion={settings.reduceMotion}
+            availableLives={lifeInfo.count}
             onExit={() => setScreen('home')}
             onCompleteLevel={handleCompleteLevel}
             onSpendLifeForRetry={handleSpendLifeForRetry}
-            availableLives={lifeInfo.count}
+            onLoseLifeOnFailure={handleLoseLifeOnFailure}
             onGrantAdLife={handleGrantAdLife}
+            onOpenLivesModal={() => setLivesModalOpen(true)}
             onNextLevel={(nextLv) => openLevel(nextLv, false)}
             onToast={showToast}
           />
@@ -448,20 +507,21 @@ export default function App() {
         {screen === 'rewards' && (
           <RewardsScreen
             progress={progress}
-            referenceDateKey={referenceDateKey}
+            referenceDateKey={todayKey}
             onClaimDailyLogin={() => {
               handleClaimDailyReward();
               setDailyModalOpen(true);
             }}
             onPlayDaily={() => openLevel(progress.currentLevel, true)}
             onShare={handleShare}
+            onSendFriendLife={handleSendFriendLife}
+            onClaimFriendLife={handleClaimFriendLife}
           />
         )}
 
         {screen === 'profile' && (
           <ProfileScreen
             progress={progress}
-            referenceDateKey={referenceDateKey}
             onUpdateName={(name) => {
               const updated = { ...progress, playerName: name };
               setProgress(updated);
@@ -469,7 +529,6 @@ export default function App() {
               showToast(`Profile name updated to ${name}.`);
             }}
             onOpenSettings={() => setSettingsOpen(true)}
-            onSimulateNextDay={handleSimulateNextDay}
           />
         )}
       </main>
@@ -478,7 +537,7 @@ export default function App() {
       {!isPlaying && (
         <nav
           aria-label="Mobile navigation"
-          className="lg:hidden fixed bottom-0 left-0 right-0 z-30 h-14 bg-[#FFFDF8]/95 backdrop-blur-md border-t border-[#E6DAC0] grid grid-cols-5 items-center"
+          className="lg:hidden fixed bottom-0 left-0 right-0 z-30 h-14 theme-surface-strong backdrop-blur-md border-t grid grid-cols-5 items-center"
         >
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -490,7 +549,7 @@ export default function App() {
                 onClick={() => handleNavClick(item.id)}
                 aria-current={active ? 'page' : undefined}
                 className={`h-full flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors cursor-pointer ${
-                  active ? 'text-[#D64B2C]' : 'text-[#7A664F]'
+                  active ? 'text-[#E55A3C] dark:text-[#2BD4C5]' : 'theme-ink-secondary'
                 }`}
               >
                 <Icon className={`w-5 h-5 ${active ? 'stroke-[2.4]' : 'stroke-[1.8]'}`} />
@@ -501,17 +560,29 @@ export default function App() {
         </nav>
       )}
 
-      {/* Daily Login Reward Sheet */}
+      {/* Lives & Refill Modal */}
+      <LivesModal
+        open={livesModalOpen}
+        progress={progress}
+        referenceDateKey={todayKey}
+        onClose={() => setLivesModalOpen(false)}
+        onGrantAdLife={handleGrantAdLife}
+        onClaimFriendLife={handleClaimFriendLife}
+        onRefillWithCoins={handleRefillLifeWithCoins}
+        onToast={showToast}
+      />
+
+      {/* Daily Login Reward Sheet (Triggered from Rewards tab) */}
       <DailyRewardModal
         open={dailyModalOpen}
         progress={progress}
-        referenceDateKey={referenceDateKey}
+        referenceDateKey={todayKey}
         justClaimedTier={justClaimedTier}
         onClaim={handleClaimDailyReward}
         onClose={() => setDailyModalOpen(false)}
       />
 
-      {/* Settings Modal */}
+      {/* Settings & Visual Theme Switcher Modal */}
       <SettingsModal
         open={settingsOpen}
         settings={settings}
@@ -519,12 +590,15 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
       />
 
-      {/* Non-intrusive Warm Toast Notification */}
+      {/* Offline Status Pill (only appears if user goes offline) */}
+      <OfflineIndicator />
+
+      {/* Non-intrusive Toast Notification */}
       {toastMessage && (
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-16 lg:bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-[#2D2218] text-[#FFFDF8] text-xs sm:text-sm font-medium shadow-xl max-w-[90vw] text-center"
+          className="fixed bottom-16 lg:bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-[#1E1712] dark:bg-[#0D2B42] text-[#FFFDF8] border border-white/10 text-xs sm:text-sm font-medium shadow-xl max-w-[90vw] text-center"
         >
           {toastMessage}
         </div>

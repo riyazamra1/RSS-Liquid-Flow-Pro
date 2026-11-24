@@ -151,6 +151,11 @@ export function loadProgress(): PlayerProgress {
       ? { ...(v3.levelStars as Record<string, number>) }
       : {};
 
+  const levelScores: Record<string, number> =
+    v3.levelScores && typeof v3.levelScores === 'object'
+      ? { ...(v3.levelScores as Record<string, number>) }
+      : {};
+
   const legacyLevel = Math.max(1, Number(legacy.level) || 1);
   const storedBestLevel = Math.max(1, Number(v3.bestLevel) || legacyLevel);
 
@@ -221,6 +226,7 @@ export function loadProgress(): PlayerProgress {
     levelsCleared,
     completedLevels,
     levelStars,
+    levelScores,
     coins: Math.max(0, Number(legacy.coins ?? v3.coins) || 0),
     bestScore: Math.max(0, Number(legacy.bestScore ?? legacy.score ?? v3.bestScore) || 0),
     score: Math.max(0, Number(legacy.score) || 0),
@@ -254,6 +260,7 @@ export function createDefaultProgress(): PlayerProgress {
     levelsCleared: 0,
     completedLevels: {},
     levelStars: {},
+    levelScores: {},
     coins: 0,
     bestScore: 0,
     score: 0,
@@ -292,6 +299,7 @@ export function saveProgress(progress: PlayerProgress): void {
       levelsCleared: progress.levelsCleared,
       completedLevels: progress.completedLevels,
       levelStars: progress.levelStars,
+      levelScores: progress.levelScores,
       coins: progress.coins,
       bestScore: progress.bestScore,
       totalMoves: progress.totalMoves,
@@ -589,7 +597,10 @@ export function applyDailyLoginClaim(
   progress: PlayerProgress,
   referenceDateKey: string = formatDateKey()
 ): { updated: PlayerProgress; granted: CalculatedDailyReward; newStreak: number } | null {
-  const status = getDailyLoginStatus(progress, referenceDateKey);
+  const realToday = formatDateKey();
+  // Strictly prevent claiming any future calendar date
+  if (referenceDateKey > realToday) return null;
+  const status = getDailyLoginStatus(progress, realToday);
   if (!status.canClaim) return null;
 
   const reward = status.todayReward;
