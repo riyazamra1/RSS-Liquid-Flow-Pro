@@ -11,7 +11,7 @@ on:
       - ".github/workflows/native-android.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: rss-liquid-flow-pro-native-android
@@ -74,10 +74,26 @@ jobs:
       - name: Assemble debug APK
         run: gradle -p native-android :app:assembleDebug --no-daemon
 
-      - name: Upload debug APK
+      - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: RSS-Liquid-Flow-Pro-Native-Debug-APK
           path: native-android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish direct-download test APK
+        if: github.ref == 'refs/heads/feat/native-android-kotlin'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="native-test-latest"
+          APK="native-android/app/build/outputs/apk/debug/app-debug.apk"
+          NOTES="Installable RSS Liquid Flow Pro native Android test build. Debug-signed; for testing only, not production distribution."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK#RSS Liquid Flow Pro APK" --clobber
+          else
+            gh release create "$TAG" "$APK#RSS Liquid Flow Pro APK" \
+              --target "$GITHUB_SHA" --prerelease --title "RSS Liquid Flow Pro — Test APK" \
+              --notes "$NOTES"
+          fi
