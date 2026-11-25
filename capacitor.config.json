@@ -1,6 +1,6 @@
 {
-  "appId": "net.rssapps.liquidflow",
-  "appName": "RSS Liquid Flow",
+  "appId": "com.riyaz.rssliquidflowpro",
+  "appName": "RSS Liquid Flow Pro",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {
