@@ -52,7 +52,7 @@ jobs:
 
       - name: Install web and Capacitor dependencies
         run: |
-          npm install --no-save --no-package-lock --no-audit --no-fund @capacitor/core@7.4.3 @capacitor/android@7.4.3 @capacitor/cli@7.4.3
+          npm install --legacy-peer-deps --no-save --no-package-lock --no-audit --no-fund @capacitor/core@7.4.3 @capacitor/android@7.4.3 @capacitor/cli@7.4.3
 
       - name: Build web application
         run: npm run build
