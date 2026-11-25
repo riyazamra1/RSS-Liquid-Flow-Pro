@@ -1,0 +1,61 @@
+name: Native Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/native-android-kotlin
+    paths:
+      - "native-android/**"
+      - ".github/workflows/native-android.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rss-liquid-flow-pro-native-android
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build native Kotlin Android app
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android platform and build tools
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Run native unit tests
+        run: gradle -p native-android :app:testDebugUnitTest --no-daemon
+
+      - name: Assemble debug APK
+        run: gradle -p native-android :app:assembleDebug --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RSS-Liquid-Flow-Pro-Native-Debug-APK
+          path: native-android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
