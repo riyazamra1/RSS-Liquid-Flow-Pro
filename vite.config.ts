@@ -11,7 +11,9 @@ export default defineConfig(() => {
       react(),
       tailwindcss(),
       VitePWA({
-        registerType: 'autoUpdate',
+        // Keep the web app manifest/install metadata, but do not register a
+        // service worker. The game must always load the current path-routed app.
+        injectRegister: null,
         includeAssets: [
           'favicon.png',
           'apple-touch-icon.png',
@@ -53,43 +55,6 @@ export default defineConfig(() => {
               purpose: 'maskable',
             },
           ],
-        },
-        workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-          runtimeCaching: [
-            {
-              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'google-fonts-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-            {
-              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'gstatic-fonts-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-          ],
-        },
-        devOptions: {
-          enabled: true,
-          type: 'module',
         },
       }),
       // Copies src/assets into dist/ so root-relative URLs still resolve in production builds.
