@@ -7,10 +7,8 @@ import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
-import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import androidx.core.content.FileProvider
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.riyaz.rssliquidflowpro.MainActivity
@@ -19,40 +17,41 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
-import java.util.concurrent.TimeUnit
 
 class AppUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result = try {
-        val manifest = fetchManifest()
-        val currentVersion = if (Build.VERSION.SDK_INT >= 28) {
-            applicationContext.packageManager.getPackageInfo(applicationContext.packageName, 0).longVersionCode
-        } else {
-            @Suppress("DEPRECATION")
-            applicationContext.packageManager.getPackageInfo(applicationContext.packageName, 0).versionCode.toLong()
-        }
-        if (manifest.versionCode <= currentVersion) {
-            UpdatePreferences.clearPending(applicationContext)
-            return Result.success()
-        }
+    override suspend fun doWork(): Result {
+        return try {
+            val manifest = fetchManifest()
+            val currentVersion = if (Build.VERSION.SDK_INT >= 28) {
+                applicationContext.packageManager.getPackageInfo(applicationContext.packageName, 0).longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                applicationContext.packageManager.getPackageInfo(applicationContext.packageName, 0).versionCode.toLong()
+            }
+            if (manifest.versionCode <= currentVersion) {
+                UpdatePreferences.clearPending(applicationContext)
+                return Result.success()
+            }
 
-        UpdatePreferences.savePending(applicationContext, manifest)
-        val manualDownload = inputData.getBoolean("manual_download", false)
-        if (!UpdatePreferences.autoUpdateEnabled(applicationContext) && !manualDownload) {
-            notifyUpdateAvailable(manifest, downloaded = false)
-            return Result.success()
-        }
+            UpdatePreferences.savePending(applicationContext, manifest)
+            val manualDownload = inputData.getBoolean("manual_download", false)
+            if (!UpdatePreferences.autoUpdateEnabled(applicationContext) && !manualDownload) {
+                notifyUpdateAvailable(manifest, downloaded = false)
+                return Result.success()
+            }
 
-        val apk = downloadAndVerify(manifest)
-        val devicePolicy = applicationContext.getSystemService(DevicePolicyManager::class.java)
-        if (devicePolicy?.isDeviceOwnerApp(applicationContext.packageName) == true) {
-            installForDeviceOwner(apk)
-        } else {
-            notifyUpdateAvailable(manifest, downloaded = true)
+            val apk = downloadAndVerify(manifest)
+            val devicePolicy = applicationContext.getSystemService(DevicePolicyManager::class.java)
+            if (devicePolicy?.isDeviceOwnerApp(applicationContext.packageName) == true) {
+                installForDeviceOwner(apk)
+            } else {
+                notifyUpdateAvailable(manifest, downloaded = true)
+            }
+            Result.success()
+        } catch (error: Exception) {
+            android.util.Log.e("RSSUpdate", "Update check failed", error)
+            Result.retry()
         }
-        Result.success()
-    } catch (error: Exception) {
-        android.util.Log.e("RSSUpdate", "Update check failed", error)
-        Result.retry()
     }
 
     private fun fetchManifest(): UpdateManifest {
@@ -72,6 +71,8 @@ class AppUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
     private fun downloadAndVerify(manifest: UpdateManifest): File {
         val destination = File(applicationContext.filesDir, UPDATE_FILE_NAME)
+        val temporary = File(applicationContext.filesDir, "$UPDATE_FILE_NAME.part")
+        temporary.delete()
         val connection = (URL(manifest.apkUrl).openConnection() as HttpURLConnection).apply {
             connectTimeout = 20_000
             readTimeout = 60_000
@@ -79,14 +80,27 @@ class AppUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWor
         }
         try {
             check(connection.responseCode == HttpURLConnection.HTTP_OK) { "APK download HTTP ${connection.responseCode}" }
+            val length = connection.contentLengthLong
+            check(length in 1..(200L * 1024L * 1024L)) { "APK size is missing or exceeds 200 MB" }
             connection.inputStream.use { input ->
-                destination.outputStream().use { output -> input.copyTo(output) }
+                temporary.outputStream().use { output ->
+                    val buffer = ByteArray(16 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        total += read
+                        check(total <= 200L * 1024L * 1024L) { "APK exceeds 200 MB" }
+                        output.write(buffer, 0, read)
+                    }
+                    check(total == length) { "APK download was incomplete" }
+                }
             }
         } finally {
             connection.disconnect()
         }
         val digest = MessageDigest.getInstance("SHA-256")
-        val actual = destination.inputStream().use { input ->
+        val actual = temporary.inputStream().use { input ->
             val buffer = ByteArray(16 * 1024)
             while (true) {
                 val read = input.read(buffer)
@@ -96,6 +110,7 @@ class AppUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWor
             digest.digest().joinToString("") { "%02x".format(it) }
         }
         check(actual.equals(manifest.sha256, ignoreCase = true)) { "Downloaded APK SHA-256 mismatch" }
+        check(temporary.renameTo(destination)) { "Could not finalize verified APK download" }
         return destination
     }
 
