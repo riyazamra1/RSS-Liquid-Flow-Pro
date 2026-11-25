@@ -12,13 +12,17 @@ on:
       - "src/**"
       - ".github/workflows/android-apk.yml"
 
+concurrency:
+  group: rss-liquid-flow-pro-android-apk
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   build-apk:
     name: Build RSS Liquid Flow Pro APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
 
     steps:
@@ -38,15 +42,16 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Accept Android SDK licenses and install platform
         run: |
-          yes | sdkmanager --licenses || true
+          yes | sdkmanager --licenses
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Install web and Capacitor dependencies
         run: |
-          npm install --no-save --no-package-lock --no-audit --no-fund
           npm install --no-save --no-package-lock --no-audit --no-fund @capacitor/core@7.4.3 @capacitor/android@7.4.3 @capacitor/cli@7.4.3
 
       - name: Build web application
