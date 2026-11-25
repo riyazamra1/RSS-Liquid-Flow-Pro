@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - feat/native-android-kotlin
     paths:
       - "native-android/**"
@@ -45,6 +46,27 @@ jobs:
         run: |
           yes | sdkmanager --licenses
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Validate native game specification
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          spec = json.loads(Path("native-android/app/src/main/assets/game-spec.json").read_text())
+          assert spec["schemaVersion"] == 1
+          assert 2 <= spec["capacity"] <= 12
+          colors = spec["colors"]
+          ids = [item["id"] for item in colors]
+          assert ids and len(ids) == len(set(ids))
+          valid = set(ids)
+          board = spec["defaultBoard"]
+          assert len(board) >= 2
+          assert all(len(tube) <= spec["capacity"] for tube in board)
+          assert all(color_id in valid for tube in board for color_id in tube)
+          for item in colors:
+              assert len(item["hex"]) == 7 and item["hex"].startswith("#")
+          print("Native game specification is valid.")
+          PY
 
       - name: Run native unit tests
         run: gradle -p native-android :app:testDebugUnitTest --no-daemon

@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.riyaz.rssliquidflowpro.game.GameSpecLoader
 import com.riyaz.rssliquidflowpro.game.LiquidFlowEngine
 import com.riyaz.rssliquidflowpro.update.UPDATE_FILE_NAME
 import com.riyaz.rssliquidflowpro.update.UpdateInstallActivity
@@ -57,21 +58,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun LiquidFlowNativeApp() {
     val context = LocalContext.current
-    val colors = listOf(Color(0xFFE01E37), Color(0xFF12A850), Color(0xFFFFD200), Color(0xFF7E2CE8))
-    var board by remember {
-        mutableStateOf(
-            LiquidFlowEngine.Board(
-                tubes = listOf(
-                    listOf(0, 1, 2, 3, 0),
-                    listOf(1, 2, 3, 0, 1),
-                    listOf(2, 3, 0, 1, 2),
-                    listOf(3, 0, 1, 2, 3),
-                    emptyList(),
-                    emptyList()
-                )
-            )
-        )
-    }
+    val gameSpec = remember { GameSpecLoader.load(context) }
+    val colors = remember(gameSpec) { gameSpec.colors.associate { it.id to Color(it.argb) } }
+    var board by remember(gameSpec) { mutableStateOf(gameSpec.newBoard()) }
     var selected by remember { mutableStateOf<Int?>(null) }
     var moves by remember { mutableIntStateOf(0) }
     var autoUpdates by remember { mutableStateOf(UpdatePreferences.autoUpdateEnabled(context)) }
@@ -81,8 +70,8 @@ private fun LiquidFlowNativeApp() {
     val solved = LiquidFlowEngine.isSolved(board)
 
     LaunchedEffect(Unit) {
-        repeat(12) {
-            delay(1500)
+        while (true) {
+            delay(3000)
             pendingAvailable = UpdatePreferences.pending(context) != null
             apkReady = File(context.filesDir, UPDATE_FILE_NAME).isFile
             updateStatus = when {
@@ -143,7 +132,7 @@ private fun LiquidFlowNativeApp() {
                                     Spacer(
                                         Modifier.fillMaxWidth().height(22.dp).padding(vertical = 1.dp)
                                             .background(
-                                                colorIndex?.let { colors[it % colors.size] } ?: Color(0xFFE8E4D9),
+                                                colorIndex?.let { colors[it] } ?: Color(0xFFE8E4D9),
                                                 RoundedCornerShape(5.dp)
                                             )
                                     )
@@ -157,10 +146,7 @@ private fun LiquidFlowNativeApp() {
                 Spacer(Modifier.weight(1f))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(onClick = {
-                        board = LiquidFlowEngine.Board(
-                            listOf(listOf(0,1,2,3,0), listOf(1,2,3,0,1), listOf(2,3,0,1,2),
-                                listOf(3,0,1,2,3), emptyList(), emptyList())
-                        )
+                        board = gameSpec.newBoard()
                         selected = null
                         moves = 0
                     }) { Text("Restart") }

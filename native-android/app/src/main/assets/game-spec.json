@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "capacity": 5,
+  "colors": [
+    { "id": 0, "name": "Ruby Red", "hex": "#E01E37" },
+    { "id": 1, "name": "Emerald Green", "hex": "#12A850" },
+    { "id": 2, "name": "Sunburst Yellow", "hex": "#FFD200" },
+    { "id": 3, "name": "Royal Purple", "hex": "#7E2CE8" },
+    { "id": 4, "name": "Jade Mint", "hex": "#00A896" },
+    { "id": 5, "name": "Rich Chocolate", "hex": "#8A4B1E" },
+    { "id": 6, "name": "Orchid Lavender", "hex": "#E066C8" },
+    { "id": 7, "name": "Lime Chartreuse", "hex": "#8CD615" }
+  ],
+  "defaultBoard": [
+    [0, 1, 2, 3, 0],
+    [1, 2, 3, 0, 1],
+    [2, 3, 0, 1, 2],
+    [3, 0, 1, 2, 3],
+    [],
+    []
+  ]
+}
