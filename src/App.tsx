@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Check,
   Coins,
+  Flame,
+  Gift,
   Heart,
   Home,
   Play,
@@ -12,6 +15,7 @@ import {
 import { AnimatedDashboardBackdrop } from './components/AnimatedDashboardBackdrop';
 import { DailyRewardModal } from './components/DailyRewardModal';
 import { DashboardScreen } from './components/DashboardScreen';
+import { LevelDetailsModal } from './components/LevelDetailsModal';
 import { LivesModal } from './components/LivesModal';
 import { OfflineIndicator } from './components/PWAInstallButton';
 import { PuzzleScreen } from './components/PuzzleScreen';
@@ -32,7 +36,9 @@ import {
   claimLifeFromFriend,
   deductOneLife,
   formatDateKey,
+  getDailyLoginStatus,
   getMaxUnlockedLevel,
+  getOffsetDateKey,
   loadProgress,
   loadSettings,
   MAX_FRIEND_LIVES_PER_DAY,
@@ -53,25 +59,23 @@ export default function App() {
   const [visibleMapLimit, setVisibleMapLimit] = useState<number>(() =>
     Math.max(40, getMaxUnlockedLevel(loadProgress()) + 24)
   );
+  const [selectedDetailLevel, setSelectedDetailLevel] = useState<number | null>(null);
   const [dailyModalOpen, setDailyModalOpen] = useState(false);
   const [justClaimedTier, setJustClaimedTier] = useState<CalculatedDailyReward | null>(null);
   const [livesModalOpen, setLivesModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Real calendar date only (future preview/claim removed)
   const todayKey = formatDateKey();
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
   }, []);
 
-  // Apply selected theme globally (CSS variables, .dark class, meta theme-color, Telegram chrome)
   useEffect(() => {
     applyThemeToDocument(settings.theme);
   }, [settings.theme]);
 
-  // Initialize Telegram Mini App SDK when running inside Telegram
   useEffect(() => {
     const { userName } = initTelegramMiniApp();
     if (userName) {
@@ -92,6 +96,16 @@ export default function App() {
 
   const maxUnlocked = getMaxUnlockedLevel(progress);
   const lifeInfo = recomputeLives(progress.lifeState);
+  const dailyLoginStatus = getDailyLoginStatus(progress, todayKey);
+  const yesterdayKey = getOffsetDateKey(todayKey, -1);
+  const consecutiveLoginDays =
+    progress.dailyLogin.lastClaimDate === todayKey ||
+    progress.dailyLogin.lastClaimDate === yesterdayKey
+      ? Math.max(0, progress.dailyLogin.streak)
+      : 0;
+  const streakCycleDays =
+    consecutiveLoginDays === 0 ? 0 : ((consecutiveLoginDays - 1) % 7) + 1;
+  const streakCyclePct = Math.round((streakCycleDays / 7) * 100);
 
   const updateSettings = (next: GameSettings) => {
     setSettings(next);
@@ -124,7 +138,6 @@ export default function App() {
 
   const openLevel = useCallback(
     (level: number, isDaily = false) => {
-      // Daily Challenge can only be played once per calendar day after completion
       if (isDaily && progress.dailyClears[todayKey]) {
         soundFx.locked(settings.sfx);
         showToast('Today’s Daily Challenge is already complete! Come back tomorrow.');
@@ -204,11 +217,13 @@ export default function App() {
       stars: number;
       scoreEarned: number;
       coinsEarned: number;
+      isPerfect?: boolean;
     }) => {
       setProgress((prev) => {
         const nextCompleted = { ...prev.completedLevels };
         const nextStars = { ...prev.levelStars };
         const nextScores = { ...prev.levelScores };
+        const nextPerfect = { ...prev.perfectLevels };
         const nextDailyClears = { ...prev.dailyClears };
 
         let levelsCleared = prev.levelsCleared;
@@ -228,6 +243,9 @@ export default function App() {
           if (firstClear) levelsCleared += 1;
           nextStars[key] = Math.max(Number(nextStars[key]) || 0, payload.stars);
           nextScores[key] = Math.max(Number(nextScores[key]) || 0, payload.scoreEarned);
+          if (payload.isPerfect) {
+            nextPerfect[key] = true;
+          }
           const unlockedNext = payload.levelId + 1;
           bestLevel = Math.max(bestLevel, unlockedNext);
           if (payload.levelId >= currentLevel) {
@@ -262,6 +280,7 @@ export default function App() {
           collections: nextCollections,
           dailyClears: nextDailyClears,
           dailyChallengeStreak,
+          perfectLevels: nextPerfect,
         };
         saveProgress(updated);
         return updated;
@@ -382,13 +401,10 @@ export default function App() {
         isPlaying ? 'h-[100dvh] overflow-hidden' : 'min-h-[100dvh]'
       }`}
     >
-      {/* Full-Screen Responsive Live Theme Backdrop (zero gaps across all viewports) */}
       <AnimatedDashboardBackdrop themeId={settings.theme} reduceMotion={settings.reduceMotion} />
 
-      {/* Top Navigation Bar: Transparent Logo left · Nav center · Lives, Coins & Settings top-right */}
-      <header className="sticky top-0 z-30 h-14 sm:h-16 theme-surface-strong backdrop-blur-md border-b">
-        <div className="max-w-7xl mx-auto h-full px-3 sm:px-6 flex items-center justify-between gap-3 sm:gap-6">
-          {/* Brand Logo + Wordmark */}
+      <header className="sticky top-0 z-30 theme-surface-strong backdrop-blur-md border-b">
+        <div className="max-w-7xl mx-auto h-14 sm:h-16 px-3 sm:px-6 flex items-center justify-between gap-3 sm:gap-6">
           <button
             type="button"
             onClick={() => handleNavClick('home')}
@@ -404,7 +420,6 @@ export default function App() {
             </span>
           </button>
 
-          {/* Desktop Navigation Links */}
           <nav
             aria-label="Primary navigation"
             className="hidden lg:flex items-center gap-7 text-sm font-semibold theme-ink-secondary"
@@ -428,7 +443,6 @@ export default function App() {
             })}
           </nav>
 
-          {/* Top-Right Corner: Lives, Coins & Settings */}
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
@@ -458,9 +472,94 @@ export default function App() {
             </button>
           </div>
         </div>
+
+        {/* Visual Login Streak Progress Bar — visible in header on Rewards screen */}
+        {screen === 'rewards' && (
+          <div className="border-t theme-border bg-gradient-to-r from-[#FFF7E2]/90 via-[#FFF2D6]/90 to-[#FDEBD2]/90 dark:from-[#12263A]/95 dark:via-[#172C42]/95 dark:to-[#1B2A3E]/95">
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 h-10 sm:h-11 flex items-center justify-between gap-3 sm:gap-5">
+              {/* Left: Consecutive Login Days Readout */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#F59E0B] to-[#E55A3C] text-white flex items-center justify-center shadow-xs shrink-0">
+                  <Flame className="w-3.5 h-3.5 fill-current" />
+                </span>
+                <div className="flex items-baseline gap-1.5 whitespace-nowrap tabular-nums">
+                  <span className="font-display text-xs sm:text-sm font-bold theme-ink">
+                    {consecutiveLoginDays}{' '}
+                    {consecutiveLoginDays === 1 ? 'Day' : 'Days'}
+                  </span>
+                  <span className="hidden sm:inline text-xs font-medium theme-ink-secondary">
+                    · Login Streak
+                    {consecutiveLoginDays > 0
+                      ? ` · ${dailyLoginStatus.streakMultiplier}× Coins`
+                      : ' · Claim Day 1'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Center: Visual 7-Day Streak Progress Bar */}
+              <div className="flex-1 max-w-md flex items-center gap-2.5 min-w-[90px]">
+                <div
+                  role="progressbar"
+                  aria-label={`Consecutive login streak progress: ${consecutiveLoginDays} consecutive ${
+                    consecutiveLoginDays === 1 ? 'day' : 'days'
+                  }, ${streakCycleDays} of 7 days in current reward cycle`}
+                  aria-valuemin={0}
+                  aria-valuemax={7}
+                  aria-valuenow={streakCycleDays}
+                  className="relative flex-1 h-2.5 rounded-full bg-black/10 dark:bg-white/12 overflow-hidden shadow-inner"
+                >
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#F59E0B] via-[#F07136] to-[#E55A3C] dark:from-[#F5BC38] dark:via-[#2BD4C5] dark:to-[#34D399] transition-all duration-300"
+                    style={{ width: `${streakCyclePct}%` }}
+                  />
+                  {/* Subtle 7-day cycle segment dividers */}
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-0 grid grid-cols-7 pointer-events-none"
+                  >
+                    {Array.from({ length: 7 }, (_, i) => (
+                      <span
+                        key={i}
+                        className={i > 0 ? 'border-l border-white/45 dark:border-black/35' : ''}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <span className="text-[11px] sm:text-xs font-display font-bold theme-ink-secondary tabular-nums whitespace-nowrap shrink-0">
+                  {streakCycleDays}/7
+                </span>
+              </div>
+
+              {/* Right: Quick Action to Inspect or Claim Today's Streak Bonus */}
+              <button
+                type="button"
+                onClick={() => {
+                  soundFx.tap(settings.sfx);
+                  setDailyModalOpen(true);
+                }}
+                className={`min-h-[30px] px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-display font-bold inline-flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer transition-opacity hover:opacity-90 ${
+                  dailyLoginStatus.canClaim
+                    ? 'bg-[#E55A3C] text-white shadow-xs'
+                    : 'bg-[#E6F4EC] dark:bg-[#143D38] text-[#1F683D] dark:text-[#5EEAD4] border border-[#BFE2CB] dark:border-[#246A60]'
+                }`}
+              >
+                {dailyLoginStatus.canClaim ? (
+                  <>
+                    <Gift className="w-3.5 h-3.5" />
+                    <span>Claim Day {dailyLoginStatus.activeDayNumber}</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Checked In</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
-      {/* Main Active Screen */}
       <main className={`relative z-10 flex-1 ${isPlaying ? 'min-h-0 overflow-hidden' : ''}`}>
         {screen === 'home' && (
           <DashboardScreen
@@ -470,11 +569,13 @@ export default function App() {
             referenceDateKey={todayKey}
             reduceMotion={settings.reduceMotion}
             onPlayCurrent={() => openLevel(progress.currentLevel, false)}
-            onSelectLevel={(lv) => openLevel(lv, false)}
+            onSelectLevel={(lv) => setSelectedDetailLevel(lv)}
             onLockedTap={handleLockedTap}
             onLoadMore={() => setVisibleMapLimit((prev) => prev + 60)}
+            onEnsureVisibleLevel={(lv) =>
+              setVisibleMapLimit((prev) => Math.max(prev, Math.ceil(lv / 20) * 20))
+            }
             onSendFriendLife={handleSendFriendLife}
-            onClaimFriendLife={handleClaimFriendLife}
             onAddFriend={handleAddFriend}
           />
         )}
@@ -533,7 +634,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Mobile Bottom Navigation Bar (hidden during fixed-screen puzzle play) */}
       {!isPlaying && (
         <nav
           aria-label="Mobile navigation"
@@ -560,7 +660,15 @@ export default function App() {
         </nav>
       )}
 
-      {/* Lives & Refill Modal */}
+      {/* Level Details Modal when clicking a map node */}
+      <LevelDetailsModal
+        open={selectedDetailLevel !== null}
+        levelId={selectedDetailLevel}
+        progress={progress}
+        onClose={() => setSelectedDetailLevel(null)}
+        onPlay={(lv) => openLevel(lv, false)}
+      />
+
       <LivesModal
         open={livesModalOpen}
         progress={progress}
@@ -572,7 +680,6 @@ export default function App() {
         onToast={showToast}
       />
 
-      {/* Daily Login Reward Sheet (Triggered from Rewards tab) */}
       <DailyRewardModal
         open={dailyModalOpen}
         progress={progress}
@@ -582,7 +689,6 @@ export default function App() {
         onClose={() => setDailyModalOpen(false)}
       />
 
-      {/* Settings & Visual Theme Switcher Modal */}
       <SettingsModal
         open={settingsOpen}
         settings={settings}
@@ -590,10 +696,8 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
       />
 
-      {/* Offline Status Pill (only appears if user goes offline) */}
       <OfflineIndicator />
 
-      {/* Non-intrusive Toast Notification */}
       {toastMessage && (
         <div
           role="status"

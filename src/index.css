@@ -86,6 +86,87 @@
     --scrollbar-thumb: #D49E76;
   }
 
+  :root[data-theme="neon"] {
+    --bg-canvas: #0A0518;
+    --bg-surface: #150B2E;
+    --bg-surface-glass: rgba(21, 11, 46, 0.84);
+    --bg-surface-strong: rgba(16, 8, 36, 0.94);
+    --bg-surface-muted: #211245;
+    --border-subtle: #3B1E78;
+    --border-strong: #5D2FB8;
+    --ink-primary: #F5EEFF;
+    --ink-secondary: #C5B3EB;
+    --ink-muted: #937EC4;
+    --accent-primary: #FF2E93;
+    --accent-coral: #FF2E93;
+    --accent-amber: #FACC15;
+    --accent-emerald: #00E5C4;
+    --accent-rose: #FF4D8D;
+    --stage-from: rgba(20, 9, 44, 0.84);
+    --stage-via: rgba(30, 13, 64, 0.88);
+    --stage-to: rgba(15, 6, 32, 0.92);
+    --stage-border: rgba(0, 242, 254, 0.34);
+    --jar-edge: rgba(168, 245, 255, 0.78);
+    --jar-edge-inner: rgba(255, 255, 255, 0.6);
+    --jar-rim-border: rgba(255, 102, 196, 0.72);
+    --scrollbar-track: #120826;
+    --scrollbar-thumb: #4B2296;
+  }
+
+  :root[data-theme="sakura"] {
+    --bg-canvas: #FFF0F5;
+    --bg-surface: #FFFBFD;
+    --bg-surface-glass: rgba(255, 251, 253, 0.88);
+    --bg-surface-strong: rgba(255, 251, 253, 0.95);
+    --bg-surface-muted: #FDE9F0;
+    --border-subtle: #F2C6D6;
+    --border-strong: #E4A3BC;
+    --ink-primary: #3A1C28;
+    --ink-secondary: #7A465B;
+    --ink-muted: #9E687D;
+    --accent-primary: #D85A7F;
+    --accent-coral: #D85A7F;
+    --accent-amber: #E59B14;
+    --accent-emerald: #2E8555;
+    --accent-rose: #D93D59;
+    --stage-from: rgba(250, 214, 226, 0.8);
+    --stage-via: rgba(244, 194, 212, 0.84);
+    --stage-to: rgba(232, 170, 194, 0.88);
+    --stage-border: rgba(202, 108, 140, 0.45);
+    --jar-edge: rgba(84, 34, 54, 0.58);
+    --jar-edge-inner: rgba(255, 255, 255, 0.92);
+    --jar-rim-border: rgba(132, 54, 84, 0.52);
+    --scrollbar-track: #FCE4EC;
+    --scrollbar-thumb: #E3A0B8;
+  }
+
+  :root[data-theme="royal"] {
+    --bg-canvas: #160926;
+    --bg-surface: #220F3A;
+    --bg-surface-glass: rgba(34, 15, 58, 0.84);
+    --bg-surface-strong: rgba(26, 11, 46, 0.94);
+    --bg-surface-muted: #301752;
+    --border-subtle: #4D277D;
+    --border-strong: #6E3BA8;
+    --ink-primary: #FAF5FF;
+    --ink-secondary: #D4BFEF;
+    --ink-muted: #A488C9;
+    --accent-primary: #EAB308;
+    --accent-coral: #F59E0B;
+    --accent-amber: #FACC15;
+    --accent-emerald: #34D399;
+    --accent-rose: #FB7185;
+    --stage-from: rgba(34, 15, 58, 0.84);
+    --stage-via: rgba(45, 20, 79, 0.88);
+    --stage-to: rgba(25, 10, 44, 0.92);
+    --stage-border: rgba(234, 179, 8, 0.35);
+    --jar-edge: rgba(253, 230, 138, 0.72);
+    --jar-edge-inner: rgba(255, 255, 255, 0.62);
+    --jar-rim-border: rgba(234, 179, 8, 0.72);
+    --scrollbar-track: #1B0B30;
+    --scrollbar-thumb: #5B2C94;
+  }
+
   html,
   body {
     font-family: var(--font-body);
@@ -435,6 +516,8 @@
 .animate-float-pin { animation: float-pin 2.4s ease-in-out infinite; }
 .animate-drift { animation: gentle-drift 6s ease-in-out infinite; }
 .animate-victory-card { animation: victory-card-pop 150ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-level-cleared { animation: level-cleared-slide-up 380ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-button-bounce { animation: button-bounce-subtle 2.2s ease-in-out infinite; }
 .animate-victory-star { animation: victory-star-pop 200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 .animate-stream-flow { animation: liquid-stream-flow 240ms linear infinite; }
 .animate-splash-left { animation: liquid-splash-left 320ms cubic-bezier(0.22, 1, 0.36, 1) infinite; }
@@ -453,6 +536,17 @@
 .animate-svg-confetti { transform-box: fill-box; transform-origin: center; animation: svg-confetti-burst var(--dur, 1150ms) cubic-bezier(0.16, 0.88, 0.32, 1) var(--delay, 0ms) both; }
 .animate-svg-burst-ring { transform-box: fill-box; transform-origin: center; animation: svg-burst-ring 520ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 .animate-unlock-pop { animation: unlock-pop 360ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes level-cleared-slide-up {
+  0% { opacity: 0; transform: translateY(40px) scale(0.95); }
+  60% { opacity: 1; transform: translateY(-6px) scale(1.02); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes button-bounce-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .animate-beacon,
@@ -492,4 +586,12 @@
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
   border-radius: 9999px;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

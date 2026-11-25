@@ -148,6 +148,86 @@ export const WORLDS: WorldTheme[] = [
       badgeText: '#784505',
     },
   },
+  {
+    id: 7,
+    name: 'Sapphire Lagoon',
+    subtitle: 'World 7 · Azure tide currents',
+    levelStart: 121,
+    levelEnd: 140,
+    palette: {
+      backdropFrom: '#F0F9FF',
+      backdropVia: '#D8F0FE',
+      backdropTo: '#BCE4FC',
+      hillFar: '#A8DCFB',
+      hillMid: '#86CCF8',
+      hillNear: '#5CB8F5',
+      pathStroke: '#98C8E8',
+      pathGlow: '#00A896',
+      accent: '#0E7490',
+      badgeBg: '#E0F2FE',
+      badgeText: '#0369A1',
+    },
+  },
+  {
+    id: 8,
+    name: 'Crystal Caverns',
+    subtitle: 'World 8 · Glowing mineral depths',
+    levelStart: 141,
+    levelEnd: 160,
+    palette: {
+      backdropFrom: '#F5F3FF',
+      backdropVia: '#EDE9FE',
+      backdropTo: '#DDD6FE',
+      hillFar: '#C4B5FD',
+      hillMid: '#A78BFA',
+      hillNear: '#8B5CF6',
+      pathStroke: '#C4B5FD',
+      pathGlow: '#7C3AED',
+      accent: '#6D28D9',
+      badgeBg: '#EDE9FE',
+      badgeText: '#5B21B6',
+    },
+  },
+  {
+    id: 9,
+    name: 'Emerald Canopy',
+    subtitle: 'World 9 · Ancient forest canopy',
+    levelStart: 161,
+    levelEnd: 180,
+    palette: {
+      backdropFrom: '#F0FDF4',
+      backdropVia: '#DCFCE7',
+      backdropTo: '#BBF7D0',
+      hillFar: '#86EFAC',
+      hillMid: '#4ADE80',
+      hillNear: '#22C55E',
+      pathStroke: '#86EFAC',
+      pathGlow: '#15803D',
+      accent: '#166534',
+      badgeBg: '#DCFCE7',
+      badgeText: '#14532D',
+    },
+  },
+  {
+    id: 10,
+    name: 'Celestial Peaks',
+    subtitle: 'World 10 · Starlit summit trials',
+    levelStart: 181,
+    levelEnd: 200,
+    palette: {
+      backdropFrom: '#FAF5FF',
+      backdropVia: '#F3E8FF',
+      backdropTo: '#E9D5FF',
+      hillFar: '#D8B4FE',
+      hillMid: '#C084FC',
+      hillNear: '#A855F7',
+      pathStroke: '#D8B4FE',
+      pathGlow: '#EC4899',
+      accent: '#9333EA',
+      badgeBg: '#F3E8FF',
+      badgeText: '#7E22CE',
+    },
+  },
 ];
 
 export function getWorldForLevel(level: number): WorldTheme {
@@ -607,10 +687,11 @@ export function evaluateLevelResult(
   const stars =
     (completeStar ? 1 : 0) + (timeBalanceStar ? 1 : 0) + (movesBalanceStar ? 1 : 0);
 
-  const baseScore = 100;
-  const timeScore = safeRemainingTime * 10;
-  const movesScore = safeRemainingMoves * 25;
-  const totalScore = baseScore + timeScore + movesScore;
+  const baseScore = 12500;
+  const timeScore = safeRemainingTime * 120;
+  const movesScore = safeRemainingMoves * 350;
+  const rawTotal = baseScore + timeScore + movesScore;
+  const totalScore = Math.min(99999, Math.max(10000, rawTotal));
 
   return {
     stars,

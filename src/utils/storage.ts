@@ -156,6 +156,11 @@ export function loadProgress(): PlayerProgress {
       ? { ...(v3.levelScores as Record<string, number>) }
       : {};
 
+  const perfectLevels: Record<string, boolean> =
+    v3.perfectLevels && typeof v3.perfectLevels === 'object'
+      ? { ...(v3.perfectLevels as Record<string, boolean>) }
+      : {};
+
   const legacyLevel = Math.max(1, Number(legacy.level) || 1);
   const storedBestLevel = Math.max(1, Number(v3.bestLevel) || legacyLevel);
 
@@ -239,6 +244,7 @@ export function loadProgress(): PlayerProgress {
     collections,
     dailyClears: (v3.dailyClears as Record<string, boolean>) || {},
     dailyChallengeStreak: Math.max(0, Number(v3.dailyChallengeStreak) || 0),
+    perfectLevels,
     lastMode: (v3.lastMode as PlayerProgress['lastMode']) || 'relaxed',
     dailyLogin: {
       lastClaimDate,
@@ -270,6 +276,7 @@ export function createDefaultProgress(): PlayerProgress {
     collections: { sprout: true },
     dailyClears: {},
     dailyChallengeStreak: 0,
+    perfectLevels: {},
     lastMode: 'relaxed',
     dailyLogin: {
       lastClaimDate: null,
@@ -308,6 +315,7 @@ export function saveProgress(progress: PlayerProgress): void {
       collections: progress.collections,
       dailyClears: progress.dailyClears,
       dailyChallengeStreak: progress.dailyChallengeStreak,
+      perfectLevels: progress.perfectLevels,
       lastMode: progress.lastMode,
       loginDate: progress.dailyLogin.lastClaimDate,
       streak: progress.dailyLogin.streak,

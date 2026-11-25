@@ -4,7 +4,7 @@ export type DifficultyLabel = 'Easy' | 'Normal' | 'Hard' | 'Expert' | 'Master';
 
 export type GameMode = 'relaxed' | 'challenge' | 'expert' | 'master';
 
-export type AppThemeId = 'botanical' | 'midnight' | 'sunset';
+export type AppThemeId = 'botanical' | 'midnight' | 'sunset' | 'neon' | 'sakura' | 'royal';
 
 export interface LifeState {
   count: number;
@@ -64,6 +64,7 @@ export interface PlayerProgress {
   collections: Record<string, boolean>;
   dailyClears: Record<string, boolean>;
   dailyChallengeStreak: number;
+  perfectLevels: Record<string, boolean>;
   lastMode: GameMode;
   dailyLogin: DailyLoginRecord;
   friends: FriendEntry[];

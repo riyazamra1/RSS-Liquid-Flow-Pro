@@ -56,6 +56,7 @@ interface PuzzleScreenProps {
     stars: number;
     scoreEarned: number;
     coinsEarned: number;
+    isPerfect?: boolean;
   }) => void;
   onSpendLifeForRetry: (levelId: number) => boolean;
   onLoseLifeOnFailure: (levelId: number) => number;
@@ -150,11 +151,13 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
   const [failReason, setFailReason] = useState<'time' | 'moves' | null>(null);
   const [outOfLivesLocked, setOutOfLivesLocked] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [resetUsed, setResetUsed] = useState(false);
   const [stuckReason, setStuckReason] = useState<'no-moves' | 'impossible' | null>(null);
   const [dismissedStuckSig, setDismissedStuckSig] = useState<string | null>(null);
   const [victoryInfo, setVictoryInfo] = useState<{
     breakdown: LevelScoreBreakdown;
     coinsEarned: number;
+    isPerfect: boolean;
   } | null>(null);
 
   const boardRef = useRef<HTMLDivElement | null>(null);
@@ -191,6 +194,7 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
     setStuckReason(null);
     setDismissedStuckSig(null);
     setShakeIdx(null);
+    setResetUsed(false);
     setVictoryInfo(null);
   }, [levelData, clearPourTimers]);
 
@@ -362,6 +366,8 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
         const alreadyCleared = isDaily
           ? Boolean(dailyDate && progress.dailyClears[dailyDate])
           : Boolean(progress.completedLevels[String(levelId)]);
+        const isPerfect = !isDaily && !resetUsed;
+        const perfectBonus = isPerfect ? 25 : 0;
         const coinsEarned =
           (isDaily
             ? alreadyCleared
@@ -369,11 +375,11 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
               : 25
             : alreadyCleared
             ? 10
-            : 20 + breakdown.stars * 10) + 15;
+            : 20 + breakdown.stars * 10) + 15 + perfectBonus;
 
         soundFx.victory(sfxEnabled);
         haptic('success');
-        setVictoryInfo({ breakdown, coinsEarned });
+        setVictoryInfo({ breakdown, coinsEarned, isPerfect });
         onCompleteLevel({
           levelId,
           isDaily,
@@ -382,6 +388,7 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
           stars: breakdown.stars,
           scoreEarned: breakdown.totalScore,
           coinsEarned,
+          isPerfect,
         });
         return;
       }
@@ -408,6 +415,7 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
       onCompleteLevel,
       progress.completedLevels,
       progress.dailyClears,
+      resetUsed,
       sfxEnabled,
       timeLeft,
     ]
@@ -416,6 +424,7 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
   const resetBoardFresh = useCallback(() => {
     clearPourTimers();
     failureLifeChargedRef.current = false;
+    setResetUsed(true);
     setPourAnim(null);
     setTubes(levelData.tubes.map((t) => [...t]));
     setJarTargetColors([...levelData.jarTargetColors]);
@@ -1877,7 +1886,7 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
           >
             <div
               className={`relative z-[60] w-full max-w-sm rounded-3xl theme-surface border-2 p-6 text-center shadow-[0_24px_64px_-12px_rgba(16,14,12,0.48)] overflow-hidden ${
-                reduceMotion ? '' : 'animate-victory-card'
+                reduceMotion ? '' : 'animate-level-cleared'
               }`}
             >
               <div
@@ -1915,14 +1924,13 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
                 {isDaily ? 'Daily Clear!' : `Level ${levelId} Clear!`}
               </h2>
 
-              {/* Exact 3-Star Policy & Remaining Time/Moves -> Score Breakdown */}
               <div className="relative mt-3.5 rounded-2xl theme-surface-muted border p-3 text-left space-y-1.5 text-xs tabular-nums">
                 <div className="flex items-center justify-between gap-2">
                   <span className="inline-flex items-center gap-1.5 font-semibold theme-ink">
                     <Star className="w-3.5 h-3.5 text-[#E8A317] fill-[#F5BC38]" />
                     Level Complete
                   </span>
-                  <span className="font-bold theme-ink">+{victoryInfo.breakdown.baseScore}</span>
+                  <span className="font-bold theme-ink">+{String(victoryInfo.breakdown.baseScore).padStart(5, '0')}</span>
                 </div>
 
                 <div className="flex items-center justify-between gap-2">
@@ -1936,7 +1944,7 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
                     />
                     Time Balance ({formatSeconds(victoryInfo.breakdown.remainingTimeSec)})
                   </span>
-                  <span className="font-bold theme-ink">+{victoryInfo.breakdown.timeScore}</span>
+                  <span className="font-bold theme-ink">+{String(victoryInfo.breakdown.timeScore).padStart(5, '0')}</span>
                 </div>
 
                 <div className="flex items-center justify-between gap-2">
@@ -1950,13 +1958,13 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
                     />
                     Moves Balance ({victoryInfo.breakdown.remainingMoves} left)
                   </span>
-                  <span className="font-bold theme-ink">+{victoryInfo.breakdown.movesScore}</span>
+                  <span className="font-bold theme-ink">+{String(victoryInfo.breakdown.movesScore).padStart(5, '0')}</span>
                 </div>
 
                 <div className="pt-1.5 mt-1 border-t theme-border flex items-center justify-between font-display text-sm font-bold">
                   <span className="theme-ink">Level Score</span>
                   <span className="text-[#2E8555] dark:text-[#5EEAD4]">
-                    {victoryInfo.breakdown.totalScore.toLocaleString()} pts
+                    {String(victoryInfo.breakdown.totalScore).padStart(5, '0')} pts
                   </span>
                 </div>
               </div>
@@ -1966,12 +1974,21 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
                 <span>+{victoryInfo.coinsEarned} coins earned</span>
               </div>
 
+              {victoryInfo.isPerfect && (
+                <div className="relative mt-2 px-3 py-1 rounded-2xl bg-gradient-to-r from-[#FFF5D6] via-[#FFE380] to-[#FCA311] border border-[#E5A317] text-[#5A3404] font-display text-xs font-extrabold shadow-sm flex items-center justify-center gap-1.5 animate-unlock-pop">
+                  <Star className="w-4 h-4 fill-current text-[#C97B0C]" />
+                  <span>★ PERFECT CLEAR! (+25 Bonus Coins) ★</span>
+                </div>
+              )}
+
               <div className="relative mt-4 space-y-2.5">
                 {!isDaily && (
                   <button
                     type="button"
                     onClick={() => onNextLevel(levelId + 1)}
-                    className="w-full min-h-[50px] rounded-2xl btn-tactile-coral text-white font-display text-lg font-bold cursor-pointer"
+                    className={`w-full min-h-[50px] rounded-2xl btn-tactile-coral text-white font-display text-lg font-bold cursor-pointer ${
+                      reduceMotion ? '' : 'animate-button-bounce'
+                    }`}
                   >
                     Next Level ({levelId + 1})
                   </button>

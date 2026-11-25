@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Crown, Lock, MapPin, Play, Star } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Crown, Lock, MapPin, Play, Star } from 'lucide-react';
 import { FriendEntry, PlayerProgress } from '../types/game';
-import { getDifficultyForLevel, getWorldForLevel } from '../utils/levelGenerator';
+import { getDifficultyForLevel, getWorldForLevel, WORLDS } from '../utils/levelGenerator';
 import { WorldChapterScenery } from './SceneryArtwork';
 
 interface LevelJourneyMapProps {
@@ -12,6 +12,7 @@ interface LevelJourneyMapProps {
   onSelectLevel: (level: number) => void;
   onLockedTap: (level: number) => void;
   onLoadMore: () => void;
+  onEnsureVisibleLevel?: (level: number) => void;
   reduceMotion: boolean;
 }
 
@@ -21,42 +22,49 @@ interface PositionedNode {
   y: number;
   worldId: number;
   isMilestone: boolean;
+  isWorldFinale: boolean;
 }
 
 interface PositionedChapter {
   worldId: number;
   y: number;
+  sectionHeight: number;
   levelStart: number;
   levelEnd: number;
 }
 
-const CHAPTER_HEIGHT = 88;
-const CHAPTER_GAP_TOP = 18;
-const FIRST_NODE_OFFSET = 56;
-const ROW_STEP = 96;
+const CHAPTER_BANNER_HEIGHT = 104;
+const CHAPTER_GAP_TOP = 26;
+const FIRST_NODE_OFFSET = 64;
+const ROW_STEP = 98;
+const CHAPTER_BOTTOM_PAD = 34;
 
 function buildMapLayout(visibleLimit: number) {
   const nodes: PositionedNode[] = [];
   const chapters: PositionedChapter[] = [];
 
-  let cursorY = 14;
+  let cursorY = 16;
   for (let level = 1; level <= visibleLimit; level++) {
     const worldId = Math.floor((level - 1) / 20) + 1;
     const isChapterStart = (level - 1) % 20 === 0;
 
     if (isChapterStart) {
       if (level > 1) cursorY += CHAPTER_GAP_TOP;
+      const chapterStartY = cursorY;
       chapters.push({
         worldId,
-        y: cursorY,
+        y: chapterStartY,
+        sectionHeight: 0,
         levelStart: level,
         levelEnd: level + 19,
       });
-      cursorY += CHAPTER_HEIGHT + FIRST_NODE_OFFSET;
+      cursorY += CHAPTER_BANNER_HEIGHT + FIRST_NODE_OFFSET;
     }
 
-    const phase = (level - 1) * 0.78;
-    const xPercent = 50 + Math.sin(phase) * 28;
+    // Gentle alternating S-curve trajectory with smooth horizontal sway
+    const indexInWorld = (level - 1) % 20;
+    const wave = Math.sin(indexInWorld * 0.78 + (worldId % 2 === 0 ? 0.65 : 0));
+    const xPercent = 50 + wave * 28;
 
     nodes.push({
       level,
@@ -64,15 +72,23 @@ function buildMapLayout(visibleLimit: number) {
       y: cursorY,
       worldId,
       isMilestone: level % 10 === 0,
+      isWorldFinale: level % 20 === 0,
     });
 
     cursorY += ROW_STEP;
+
+    const isChapterEnd = level % 20 === 0 || level === visibleLimit;
+    if (isChapterEnd && chapters.length > 0) {
+      const currentChapter = chapters[chapters.length - 1];
+      currentChapter.sectionHeight = cursorY - currentChapter.y + CHAPTER_BOTTOM_PAD;
+      cursorY += CHAPTER_BOTTOM_PAD;
+    }
   }
 
   return {
     nodes,
     chapters,
-    totalHeight: cursorY + 36,
+    totalHeight: cursorY + 24,
   };
 }
 
@@ -84,17 +100,20 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
   onSelectLevel,
   onLockedTap,
   onLoadMore,
+  onEnsureVisibleLevel,
   reduceMotion,
 }) => {
   const nodeRefs = useRef<Map<number, HTMLButtonElement | null>>(new Map());
+  const chapterRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [pendingScrollWorld, setPendingScrollWorld] = useState<number | null>(null);
+  const [pendingScrollLevel, setPendingScrollLevel] = useState<number | null>(null);
 
   const { nodes, chapters, totalHeight } = useMemo(
     () => buildMapLayout(visibleLimit),
     [visibleLimit]
   );
 
-  // Map friends by their current level so friend badges appear directly on the winding map
   const friendsByLevel = useMemo(() => {
     const map = new Map<number, FriendEntry[]>();
     progress.friends.forEach((friend) => {
@@ -112,7 +131,21 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
         behavior: reduceMotion ? 'auto' : 'smooth',
         block: 'center',
       });
+      return true;
     }
+    return false;
+  };
+
+  const scrollToWorld = (worldId: number) => {
+    const el = chapterRefs.current.get(worldId);
+    if (el) {
+      el.scrollIntoView({
+        behavior: reduceMotion ? 'auto' : 'smooth',
+        block: 'start',
+      });
+      return true;
+    }
+    return false;
   };
 
   useEffect(() => {
@@ -125,10 +158,40 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
 
   useEffect(() => {
     if (focusLevel && focusLevel > 0) {
-      scrollToLevel(focusLevel);
+      if (!scrollToLevel(focusLevel)) {
+        onEnsureVisibleLevel?.(focusLevel);
+        setPendingScrollLevel(focusLevel);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusLevel]);
+
+  useEffect(() => {
+    if (pendingScrollWorld !== null) {
+      if (scrollToWorld(pendingScrollWorld)) {
+        setPendingScrollWorld(null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleLimit, pendingScrollWorld]);
+
+  useEffect(() => {
+    if (pendingScrollLevel !== null) {
+      if (scrollToLevel(pendingScrollLevel)) {
+        setPendingScrollLevel(null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleLimit, pendingScrollLevel]);
+
+  const handleWorldTabClick = (worldId: number, levelEnd: number) => {
+    if (levelEnd > visibleLimit) {
+      onEnsureVisibleLevel?.(levelEnd);
+      setPendingScrollWorld(worldId);
+    } else {
+      scrollToWorld(worldId);
+    }
+  };
 
   const segments = useMemo(() => {
     const result: {
@@ -137,6 +200,9 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
       unlocked: boolean;
       completed: boolean;
       worldId: number;
+      glowColor: string;
+      strokeColor: string;
+      sameWorld: boolean;
     }[] = [];
 
     for (let i = 0; i < nodes.length - 1; i++) {
@@ -150,12 +216,16 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
       const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
       const completed = Boolean(progress.completedLevels[String(a.level)]);
       const unlocked = b.level <= maxUnlocked;
+      const world = getWorldForLevel(a.level);
       result.push({
         key: `${a.level}-${b.level}`,
         d,
         unlocked,
         completed,
         worldId: a.worldId,
+        glowColor: world.palette.pathGlow,
+        strokeColor: world.palette.pathStroke,
+        sameWorld: a.worldId === b.worldId,
       });
     }
     return result;
@@ -166,123 +236,250 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
   return (
     <section
       aria-label="Level Progression Map"
-      className="relative rounded-3xl overflow-hidden bg-transparent border theme-border shadow-[0_14px_38px_-14px_rgba(24,18,12,0.24)] flex flex-col h-full"
+      className="relative rounded-3xl overflow-hidden theme-surface-glass backdrop-blur-md border theme-border shadow-[0_16px_40px_-16px_rgba(24,18,12,0.28)] flex flex-col"
     >
-      {/* Compact Transparent Glass Map Header */}
-      <div className="sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-2.5 theme-surface-glass backdrop-blur-md border-b">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold theme-ink-secondary truncate">
-            {currentWorld.subtitle}
-          </p>
-          <h2 className="font-display text-lg sm:text-xl font-bold theme-ink truncate leading-tight">
-            {currentWorld.name}
-          </h2>
+      {/* Sticky Map Top Bar + 10-World Quick-Jump Strip */}
+      <div className="sticky top-0 z-20 theme-surface-strong backdrop-blur-md border-b theme-border">
+        <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold theme-ink-secondary truncate">
+              200-Level Atlas · 10 Distinct Themed Worlds
+            </p>
+            <h2 className="font-display text-lg sm:text-xl font-bold theme-ink truncate leading-tight">
+              Journey Map
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => scrollToLevel(progress.currentLevel)}
+            className="inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 rounded-xl theme-surface-muted border text-xs font-display font-bold theme-ink transition-opacity hover:opacity-90 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#E55A3C]"
+          >
+            <MapPin className="w-3.5 h-3.5 text-[#E55A3C] dark:text-[#2BD4C5]" />
+            <span>Current · Lv {progress.currentLevel}</span>
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => scrollToLevel(progress.currentLevel)}
-          className="inline-flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 rounded-xl theme-surface-muted border text-xs font-bold transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#E55A3C]"
+        {/* Horizontal 10-World Quick-Jump Navigator */}
+        <div
+          role="tablist"
+          aria-label="Jump to world chapter"
+          className="px-4 pb-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar"
         >
-          <MapPin className="w-3.5 h-3.5 text-[#E55A3C] dark:text-[#2BD4C5]" />
-          <span>Level {progress.currentLevel}</span>
-        </button>
+          {WORLDS.map((world) => {
+            const isCurrentWorld = world.id === currentWorld.id;
+            const worldUnlocked = maxUnlocked >= world.levelStart;
+            let clearedCount = 0;
+            for (let lv = world.levelStart; lv <= world.levelEnd; lv++) {
+              if (progress.completedLevels[String(lv)]) clearedCount += 1;
+            }
+            const worldComplete = clearedCount >= 20;
+
+            return (
+              <button
+                key={world.id}
+                type="button"
+                role="tab"
+                aria-selected={isCurrentWorld}
+                onClick={() => handleWorldTabClick(world.id, world.levelEnd)}
+                title={`World ${world.id}: ${world.name} (Levels ${world.levelStart}–${world.levelEnd})`}
+                className={`min-h-[34px] px-2.5 py-1 rounded-xl border text-xs font-display font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-all tabular-nums ${
+                  isCurrentWorld
+                    ? 'theme-surface border-[#E55A3C] dark:border-[#2BD4C5] theme-ink shadow-xs'
+                    : worldUnlocked
+                    ? 'theme-surface-muted theme-ink-secondary hover:opacity-100 opacity-90'
+                    : 'theme-surface-muted theme-ink-muted opacity-65 hover:opacity-90'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className="w-2.5 h-2.5 rounded-full shrink-0 border border-black/15"
+                  style={{ backgroundColor: world.palette.accent }}
+                />
+                <span>W{world.id}</span>
+                {worldComplete ? (
+                  <Check className="w-3 h-3 text-[#2E8555] dark:text-[#5EEAD4]" />
+                ) : !worldUnlocked ? (
+                  <Lock className="w-2.5 h-2.5 opacity-70" />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Transparent Scrollable Winding Map Canvas so Full-Screen Theme Scenery Shines Behind */}
+      {/* Scrollable Biome Map Canvas */}
       <div
         ref={scrollContainerRef}
-        className="relative flex-1 w-full overflow-y-auto overflow-x-hidden min-h-[58dvh] max-h-[calc(100dvh-196px)] lg:max-h-[calc(100dvh-132px)] scroll-smooth bg-white/10 dark:bg-black/15"
+        className="relative w-full overflow-y-auto overflow-x-hidden min-h-[56dvh] max-h-[calc(100dvh-230px)] lg:max-h-[calc(100dvh-180px)] scroll-smooth"
       >
         <div className="relative w-full" style={{ height: `${totalHeight}px` }}>
-          {/* World Chapter Scenery Banners */}
+          {/* Per-World Themed Biome Zone Backgrounds */}
           {chapters.map((chapter) => {
             const world = getWorldForLevel(chapter.levelStart);
-            const clearedInWorld = Array.from({ length: 20 }, (_, i) => chapter.levelStart + i).filter(
-              (lv) => progress.completedLevels[String(lv)]
-            ).length;
+            return (
+              <div
+                key={`biome-bg-${chapter.worldId}`}
+                aria-hidden="true"
+                className="absolute left-2 right-2 sm:left-3 sm:right-3 rounded-3xl overflow-hidden border theme-border pointer-events-none"
+                style={{
+                  top: `${chapter.y}px`,
+                  height: `${chapter.sectionHeight}px`,
+                }}
+              >
+                {/* Light mode soft world gradient wash */}
+                <div
+                  className="absolute inset-0 opacity-78 dark:opacity-0 transition-opacity"
+                  style={{
+                    background: `linear-gradient(180deg, ${world.palette.backdropFrom} 0%, ${world.palette.backdropVia} 52%, ${world.palette.backdropTo} 100%)`,
+                  }}
+                />
+                {/* Dark mode atmospheric biome tint */}
+                <div
+                  className="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity"
+                  style={{
+                    background: `linear-gradient(180deg, rgba(10, 22, 36, 0.72) 0%, ${world.palette.accent}24 45%, rgba(8, 16, 28, 0.82) 100%)`,
+                  }}
+                />
+                {/* Subtle radial topographic glow accents inside biome */}
+                <div
+                  className="absolute -left-16 top-1/3 w-52 h-52 rounded-full blur-3xl opacity-35 dark:opacity-20"
+                  style={{ backgroundColor: world.palette.hillNear }}
+                />
+                <div
+                  className="absolute -right-16 bottom-1/4 w-56 h-56 rounded-full blur-3xl opacity-35 dark:opacity-20"
+                  style={{ backgroundColor: world.palette.pathGlow }}
+                />
+              </div>
+            );
+          })}
+
+          {/* World Chapter Illustrated Header Banners */}
+          {chapters.map((chapter) => {
+            const world = getWorldForLevel(chapter.levelStart);
+            let clearedInWorld = 0;
+            let starsInWorld = 0;
+            for (let lv = chapter.levelStart; lv <= chapter.levelEnd; lv++) {
+              if (progress.completedLevels[String(lv)]) clearedInWorld += 1;
+              starsInWorld += Number(progress.levelStars[String(lv)]) || 0;
+            }
+            const worldPct = Math.round((clearedInWorld / 20) * 100);
 
             return (
               <div
                 key={`world-${chapter.worldId}`}
-                className="absolute left-3 right-3 sm:left-5 sm:right-5 rounded-2xl overflow-hidden border theme-border shadow-[0_6px_18px_-8px_rgba(30,22,12,0.28)]"
-                style={{ top: `${chapter.y}px`, height: `${CHAPTER_HEIGHT}px` }}
+                ref={(el) => {
+                  chapterRefs.current.set(chapter.worldId, el);
+                }}
+                className="absolute left-4 right-4 sm:left-5 sm:right-5 rounded-2xl overflow-hidden border theme-border shadow-[0_8px_22px_-10px_rgba(24,18,12,0.32)] scroll-mt-3 z-10"
+                style={{ top: `${chapter.y + 8}px`, height: `${CHAPTER_BANNER_HEIGHT - 8}px` }}
               >
                 <WorldChapterScenery world={world} />
-                <div className="relative z-10 h-full px-4 sm:px-5 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-semibold text-[#5E472D] tabular-nums">
-                      World {world.id} · Levels {chapter.levelStart}–{chapter.levelEnd}
+                <div className="absolute inset-0 bg-gradient-to-r from-[#231810]/72 via-[#231810]/45 to-[#231810]/25" />
+
+                <div className="relative z-10 h-full px-4 sm:px-5 py-3 flex flex-col justify-between">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-[#FDECC4] tabular-nums">
+                        World {world.id} · Levels {chapter.levelStart}–{chapter.levelEnd}
+                      </div>
+                      <h3 className="font-display text-lg sm:text-xl font-bold text-white leading-tight truncate">
+                        {world.name}
+                      </h3>
                     </div>
-                    <h3 className="font-display text-lg sm:text-xl font-bold text-[#2D2218]">
-                      {world.name}
-                    </h3>
+
+                    <div className="shrink-0 bg-[#1B130C]/65 backdrop-blur-xs px-3 py-1.5 rounded-xl border border-white/20 text-right">
+                      <div className="font-display text-xs sm:text-sm font-bold text-white tabular-nums leading-none">
+                        {clearedInWorld} / 20
+                      </div>
+                      <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-[#FFE082] tabular-nums leading-none">
+                        <Star className="w-3 h-3 fill-[#F5BC38] text-[#F5BC38]" />
+                        <span>{starsInWorld}/60</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right shrink-0 bg-[#FFFDF8]/90 backdrop-blur-xs px-3 py-1.5 rounded-xl border border-[#E5D7B9]">
-                    <div className="font-display text-sm font-bold text-[#2D2218] tabular-nums">
-                      {clearedInWorld} / 20
-                    </div>
+
+                  {/* World completion track */}
+                  <div className="w-full h-1.5 rounded-full bg-white/25 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: `${Math.max(clearedInWorld > 0 ? 4 : 0, worldPct)}%`,
+                        backgroundColor: '#FDE047',
+                      }}
+                    />
                   </div>
                 </div>
               </div>
             );
           })}
 
-          {/* Winding SVG Path Connecting Every Level Node */}
+          {/* Winding World-Colored SVG Trail Path */}
           <svg
             viewBox={`0 0 1000 ${totalHeight}`}
             preserveAspectRatio="none"
-            className="absolute inset-0 w-full h-full pointer-events-none"
+            className="absolute inset-0 w-full h-full pointer-events-none z-[5]"
             aria-hidden="true"
           >
-            {segments.map((seg) => (
-              <path
-                key={`bed-${seg.key}`}
-                d={seg.d}
-                fill="none"
-                stroke="rgba(45, 34, 24, 0.28)"
-                strokeWidth="24"
-                strokeLinecap="round"
-              />
-            ))}
-
-            {segments.map((seg) => (
-              <path
-                key={`inner-${seg.key}`}
-                d={seg.d}
-                fill="none"
-                stroke={seg.completed ? '#F6B838' : seg.unlocked ? '#F49D54' : 'rgba(255, 250, 238, 0.72)'}
-                strokeWidth={seg.completed || seg.unlocked ? '12' : '10'}
-                strokeDasharray={seg.unlocked || seg.completed ? undefined : '10 12'}
-                strokeLinecap="round"
-              />
-            ))}
+            {segments
+              .filter((seg) => seg.sameWorld)
+              .map((seg) => (
+                <path
+                  key={`bed-${seg.key}`}
+                  d={seg.d}
+                  fill="none"
+                  stroke="rgba(36, 26, 18, 0.2)"
+                  strokeWidth="22"
+                  strokeLinecap="round"
+                />
+              ))}
 
             {segments
-              .filter((seg) => seg.completed)
+              .filter((seg) => seg.sameWorld)
+              .map((seg) => (
+                <path
+                  key={`inner-${seg.key}`}
+                  d={seg.d}
+                  fill="none"
+                  stroke={
+                    seg.completed
+                      ? seg.glowColor
+                      : seg.unlocked
+                      ? '#F49D54'
+                      : 'rgba(255, 250, 238, 0.72)'
+                  }
+                  strokeWidth={seg.completed || seg.unlocked ? '11' : '8'}
+                  strokeDasharray={seg.unlocked || seg.completed ? undefined : '10 12'}
+                  strokeLinecap="round"
+                />
+              ))}
+
+            {segments
+              .filter((seg) => seg.sameWorld && seg.completed)
               .map((seg) => (
                 <path
                   key={`sheen-${seg.key}`}
                   d={seg.d}
                   fill="none"
-                  stroke="#FFF3C4"
-                  strokeWidth="3.5"
+                  stroke="#FFF6D6"
+                  strokeWidth="3"
                   strokeLinecap="round"
-                  opacity="0.85"
+                  opacity="0.82"
                 />
               ))}
           </svg>
 
-          {/* Interactive Tactile Level Nodes + Friend Level Avatars */}
+          {/* Interactive Level Medallions + Friends */}
           {nodes.map((node) => {
             const isCompleted = Boolean(progress.completedLevels[String(node.level)]);
             const isCurrent = node.level === progress.currentLevel;
             const isLocked = node.level > maxUnlocked;
             const stars = Number(progress.levelStars[String(node.level)]) || (isCompleted ? 1 : 0);
             const levelScore = Number(progress.levelScores?.[String(node.level)]) || 0;
+            const isPerfect = Boolean(progress.perfectLevels?.[String(node.level)]);
             const difficulty = getDifficultyForLevel(node.level);
             const nodeFriends = friendsByLevel.get(node.level) ?? [];
-            const placeFriendsLeft = node.xPercent > 55;
+            const placeFriendsLeft = node.xPercent > 54;
 
             const handlePress = () => {
               if (isLocked) {
@@ -300,10 +497,10 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
                   left: `${node.xPercent}%`,
                   top: `${node.y}px`,
                   transform: 'translate(-50%, -50%)',
-                  zIndex: isCurrent ? 18 : nodeFriends.length > 0 ? 14 : 10,
+                  zIndex: isCurrent ? 18 : nodeFriends.length > 0 ? 14 : 11,
                 }}
               >
-                {/* Floating Game Logo Pin above Current Playable Level */}
+                {/* Floating Game Emblem Pin above Current Playable Level */}
                 {isCurrent && (
                   <div
                     className={`absolute -top-12 flex flex-col items-center pointer-events-none ${
@@ -321,19 +518,21 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
                   </div>
                 )}
 
-                {/* Pulsing Beacon Ring behind Current Level */}
+                {/* Soft Beacon Ring behind Current Level */}
                 {isCurrent && !reduceMotion && (
                   <span
                     aria-hidden="true"
-                    className="absolute inset-0 -m-2 rounded-full border-4 border-[#F59E0B] animate-beacon pointer-events-none"
+                    className="absolute inset-0 -m-2.5 rounded-full border-4 border-[#F59E0B] animate-beacon pointer-events-none"
                   />
                 )}
 
-                {/* Friends currently on this Level shown directly beside the Map Node */}
+                {/* Friends currently on this Level */}
                 {nodeFriends.length > 0 && (
                   <div
                     className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none ${
-                      placeFriendsLeft ? 'right-[calc(100%+10px)] flex-row-reverse' : 'left-[calc(100%+10px)]'
+                      placeFriendsLeft
+                        ? 'right-[calc(100%+10px)] flex-row-reverse'
+                        : 'left-[calc(100%+10px)]'
                     }`}
                   >
                     {nodeFriends.slice(0, 2).map((friend) => (
@@ -356,6 +555,7 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
                   </div>
                 )}
 
+                {/* Tactile Level Medallion Button */}
                 <button
                   ref={(el) => {
                     nodeRefs.current.set(node.level, el);
@@ -366,12 +566,12 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
                     isLocked
                       ? `Level ${node.level}, ${difficulty}, locked`
                       : isCurrent
-                      ? `Play current Level ${node.level}, ${difficulty}`
-                      : `Replay completed Level ${node.level}, ${stars} of 3 stars, score ${levelScore}`
+                      ? `Open Level ${node.level} details, ${difficulty}`
+                      : `Open completed Level ${node.level} details, ${stars} of 3 stars, score ${levelScore}`
                   }
                   className={`relative flex flex-col items-center justify-center rounded-full border-[3px] transition-transform duration-150 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#E55A3C] ${
                     isCurrent
-                      ? 'w-[74px] h-[74px] node-current border-[#FFF5DF] text-white cursor-pointer hover:scale-105 active:scale-95'
+                      ? 'w-[76px] h-[76px] node-current border-[#FFF5DF] text-white cursor-pointer hover:scale-105 active:scale-95'
                       : isCompleted
                       ? `w-[66px] h-[66px] ${
                           node.isMilestone ? 'node-milestone-complete' : 'node-complete'
@@ -437,10 +637,24 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
                   )}
                 </button>
 
-                {/* Completed Level Score displayed neatly under the node */}
+                {/* Completed Node Score & ★ PERFECT Badge */}
                 {isCompleted && (
-                  <span className="mt-1 px-2 py-0.5 rounded-lg theme-surface-strong border text-[10px] font-bold theme-ink tabular-nums shadow-xs whitespace-nowrap">
-                    {levelScore > 0 ? `${levelScore.toLocaleString()} pts` : `${stars}★`}
+                  <div className="mt-1 flex flex-col items-center gap-0.5">
+                    {isPerfect && (
+                      <span className="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-[#FFD700] to-[#F59E0B] text-[#4E2A02] text-[9px] font-display font-extrabold shadow-xs border border-white/80 tracking-wide leading-none whitespace-nowrap">
+                        ★ PERFECT
+                      </span>
+                    )}
+                    <span className="px-2 py-0.5 rounded-lg theme-surface-strong border text-[10px] font-bold theme-ink tabular-nums shadow-xs whitespace-nowrap leading-tight">
+                      {levelScore > 0 ? String(levelScore).padStart(5, '0') : `${stars}★`}
+                    </span>
+                  </div>
+                )}
+
+                {/* Subtle Milestone caption on uncompleted 10th/20th levels */}
+                {!isCompleted && node.isMilestone && !isCurrent && (
+                  <span className="mt-1 text-[10px] font-bold theme-ink-secondary whitespace-nowrap">
+                    {node.isWorldFinale ? 'World Finale' : 'Milestone'}
                   </span>
                 )}
               </div>
@@ -448,12 +662,12 @@ export const LevelJourneyMap: React.FC<LevelJourneyMapProps> = ({
           })}
         </div>
 
-        {/* Load More Levels Action */}
-        <div className="px-4 pb-6 pt-2 flex justify-center">
+        {/* Load More Worlds / Levels */}
+        <div className="px-4 pb-6 pt-3 flex justify-center">
           <button
             type="button"
             onClick={onLoadMore}
-            className="min-h-[42px] px-5 py-2 rounded-2xl theme-surface-strong border text-xs sm:text-sm font-bold shadow-xs transition-colors cursor-pointer"
+            className="min-h-[42px] px-5 py-2 rounded-2xl theme-surface-strong border text-xs sm:text-sm font-display font-bold theme-ink shadow-xs hover:opacity-90 transition-opacity cursor-pointer whitespace-nowrap"
           >
             Load More Levels ({visibleLimit + 1}–{visibleLimit + 60})
           </button>

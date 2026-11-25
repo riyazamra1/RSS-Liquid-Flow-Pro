@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Crown, Heart, Plus, Send, Trophy, Users, X } from 'lucide-react';
+import { Crown, Plus, Send, Trophy, Users, X } from 'lucide-react';
 import { FriendEntry, PlayerProgress } from '../types/game';
 import { getFriendDailyQuota, MAX_FRIEND_LIVES_PER_DAY } from '../utils/storage';
 
@@ -7,7 +7,6 @@ interface FriendsLeaderboardProps {
   progress: PlayerProgress;
   referenceDateKey: string;
   onSendLife: (friendId: string) => void;
-  onClaimLife: (friendId: string) => void;
   onAddFriend: (name: string, level: number) => void;
   onJumpToLevel?: (level: number) => void;
   compact?: boolean;
@@ -26,7 +25,6 @@ export const FriendsLeaderboard: React.FC<FriendsLeaderboardProps> = ({
   progress,
   referenceDateKey,
   onSendLife,
-  onClaimLife,
   onAddFriend,
   onJumpToLevel,
   compact = false,
@@ -176,27 +174,16 @@ export const FriendsLeaderboard: React.FC<FriendsLeaderboardProps> = ({
               </button>
 
               {entry.friend && quota && (
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
                     onClick={() => onSendLife(entry.friend!.id)}
                     disabled={!quota.canSend}
                     title={`Send 1 life (${quota.sentToday}/${MAX_FRIEND_LIVES_PER_DAY} today)`}
-                    className="min-h-[32px] px-2 py-1 rounded-xl bg-[#FBEBD0] dark:bg-[#183C57] hover:opacity-90 disabled:opacity-45 text-[#7E4B0A] dark:text-[#7CE8FF] text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer tabular-nums whitespace-nowrap"
+                    className="min-h-[32px] px-2.5 py-1 rounded-xl bg-[#FBEBD0] dark:bg-[#183C57] hover:opacity-90 disabled:opacity-45 text-[#7E4B0A] dark:text-[#7CE8FF] text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer tabular-nums whitespace-nowrap"
                   >
                     <Send className="w-3 h-3" />
-                    <span>{quota.remainingSend}/{MAX_FRIEND_LIVES_PER_DAY}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => onClaimLife(entry.friend!.id)}
-                    disabled={!quota.canReceive}
-                    title={`Receive 1 shared life (${quota.receivedToday}/${MAX_FRIEND_LIVES_PER_DAY} today)`}
-                    className="min-h-[32px] px-2 py-1 rounded-xl bg-[#FFE7EC] dark:bg-[#3A1E33] hover:opacity-90 disabled:opacity-45 text-[#B82843] dark:text-[#FF8AA1] text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer tabular-nums whitespace-nowrap"
-                  >
-                    <Heart className="w-3 h-3 fill-current" />
-                    <span>+{quota.remainingReceive}</span>
+                    <span>Send ({quota.remainingSend}/{MAX_FRIEND_LIVES_PER_DAY})</span>
                   </button>
                 </div>
               )}
