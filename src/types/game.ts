@@ -77,6 +77,7 @@ export interface GameSettings {
   reduceMotion: boolean;
   showHints: boolean;
   autoAdvance: boolean;
+  autoUpdate: boolean;
   mode: GameMode;
   theme: AppThemeId;
 }
