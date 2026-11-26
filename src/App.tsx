@@ -66,7 +66,6 @@ export default function App() {
   const [livesModalOpen, setLivesModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [showLaunchSplash, setShowLaunchSplash] = useState(true);
   const [availableUpdate, setAvailableUpdate] = useState<AvailableUpdate | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
 
@@ -80,10 +79,12 @@ export default function App() {
     applyThemeToDocument(settings.theme);
   }, [settings.theme]);
 
-  // Keep a short branded launch screen visible after the app shell has rendered.
+  // The boot splash is rendered by index.html before React starts.
+  // Remove it only after the game shell has committed its first render.
   useEffect(() => {
-    const splashTimer = window.setTimeout(() => setShowLaunchSplash(false), 1100);
-    return () => window.clearTimeout(splashTimer);
+    const splash = document.getElementById('rss-boot-splash');
+    if (!splash) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => splash.remove()));
   }, []);
 
   // Automatic checks are non-blocking. An available update is presented in-game;
@@ -781,15 +782,6 @@ export default function App() {
               Later
             </button>
           </div>
-        </div>
-      )}
-
-      {showLaunchSplash && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-[#090b2b]">
-          <div className="flex h-36 w-36 items-center justify-center rounded-[2rem] bg-white p-4 shadow-2xl">
-            <img src="/logo.png" alt="RSS Liquid Flow logo" className="h-full w-full object-contain" />
-          </div>
-          <p className="font-display text-xl font-bold tracking-wide text-white">RSS LIQUID FLOW</p>
         </div>
       )}
 
