@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Check,
   Coins,
@@ -49,6 +49,7 @@ import {
   sendLifeToFriend,
 } from './utils/storage';
 import { applyThemeToDocument } from './utils/themes';
+import { checkAndApplyNativeUpdate } from './utils/appUpdater';
 
 export default function App() {
   const [progress, setProgress] = useState<PlayerProgress>(() => loadProgress());
@@ -65,6 +66,7 @@ export default function App() {
   const [livesModalOpen, setLivesModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const updateCheckStarted = useRef(false);
 
   const todayKey = formatDateKey();
 
@@ -75,6 +77,15 @@ export default function App() {
   useEffect(() => {
     applyThemeToDocument(settings.theme);
   }, [settings.theme]);
+
+  // Native Android update check runs once per app launch; game progress is untouched.
+  useEffect(() => {
+    if (updateCheckStarted.current) return;
+    updateCheckStarted.current = true;
+    void checkAndApplyNativeUpdate(settings.autoUpdate).catch((error) => {
+      console.warn('RSS app update check failed:', error);
+    });
+  }, []);
 
   useEffect(() => {
     const { userName } = initTelegramMiniApp();
