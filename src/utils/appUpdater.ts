@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
-interface AvailableUpdate {
+export interface AvailableUpdate {
   available: boolean;
   versionCode?: number;
   versionName?: string;
@@ -15,23 +15,17 @@ interface RssAppUpdaterPlugin {
 
 const NativeUpdater = registerPlugin<RssAppUpdaterPlugin>('RssAppUpdater');
 
-/**
- * Checks only native Android installs. Browser and Telegram builds are unchanged.
- * Android always presents its own final package-install confirmation.
- */
-export async function checkAndApplyNativeUpdate(autoUpdate: boolean): Promise<void> {
-  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
+/** Check for an update without downloading or leaving the game. */
+export async function checkNativeUpdate(): Promise<AvailableUpdate | null> {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return null;
+  return NativeUpdater.checkForUpdate();
+}
 
-  const update = await NativeUpdater.checkForUpdate();
-  if (!update.available || !update.apkUrl || !update.sha256) return;
-
-  if (!autoUpdate) {
-    const accepted = window.confirm(
-      `RSS Liquid Flow Pro update ${update.versionName ?? ''} is available. Download and install it now?`
-    );
-    if (!accepted) return;
+/** Download only after the player explicitly chooses Update now. */
+export async function downloadNativeUpdate(update: AvailableUpdate): Promise<void> {
+  if (!update.apkUrl || !update.sha256) {
+    throw new Error('The update package metadata is incomplete.');
   }
-
   await NativeUpdater.downloadAndInstall({
     apkUrl: update.apkUrl,
     sha256: update.sha256,

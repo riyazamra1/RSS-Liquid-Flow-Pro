@@ -49,7 +49,7 @@ import {
   sendLifeToFriend,
 } from './utils/storage';
 import { applyThemeToDocument } from './utils/themes';
-import { checkAndApplyNativeUpdate } from './utils/appUpdater';
+import { AvailableUpdate, checkNativeUpdate, downloadNativeUpdate } from './utils/appUpdater';
 
 export default function App() {
   const [progress, setProgress] = useState<PlayerProgress>(() => loadProgress());
@@ -66,7 +66,9 @@ export default function App() {
   const [livesModalOpen, setLivesModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const updateCheckStarted = useRef(false);
+  const [showLaunchSplash, setShowLaunchSplash] = useState(true);
+  const [availableUpdate, setAvailableUpdate] = useState<AvailableUpdate | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
 
   const todayKey = formatDateKey();
 
@@ -78,14 +80,40 @@ export default function App() {
     applyThemeToDocument(settings.theme);
   }, [settings.theme]);
 
-  // Native Android update check runs once per app launch; game progress is untouched.
+  // Keep a short branded launch screen visible after the app shell has rendered.
   useEffect(() => {
-    if (updateCheckStarted.current) return;
-    updateCheckStarted.current = true;
-    void checkAndApplyNativeUpdate(settings.autoUpdate).catch((error) => {
-      console.warn('RSS app update check failed:', error);
-    });
+    const splashTimer = window.setTimeout(() => setShowLaunchSplash(false), 1100);
+    return () => window.clearTimeout(splashTimer);
   }, []);
+
+  // Automatic checks are non-blocking. An available update is presented in-game;
+  // downloading and opening Android's installer always requires an explicit tap.
+  const checkForNativeUpdate = useCallback(async (manual: boolean) => {
+    try {
+      const update = await checkNativeUpdate();
+      if (!update) {
+        if (manual) showToast('Update checks are available in the Android app.');
+        return;
+      }
+      if (update.available && update.apkUrl && update.sha256) {
+        setAvailableUpdate(update);
+        setSettingsOpen(false);
+      } else if (manual) {
+        showToast('RSS Liquid Flow is already up to date.');
+      }
+    } catch (error) {
+      console.warn('RSS app update check failed:', error);
+      if (manual) showToast('Unable to check for updates. Please try again later.');
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (!settings.autoUpdate) return;
+    const checkTimer = window.setTimeout(() => {
+      void checkForNativeUpdate(false);
+    }, 2500);
+    return () => window.clearTimeout(checkTimer);
+  }, [settings.autoUpdate, checkForNativeUpdate]);
 
   useEffect(() => {
     const { userName } = initTelegramMiniApp();
@@ -704,8 +732,66 @@ export default function App() {
         open={settingsOpen}
         settings={settings}
         onUpdate={updateSettings}
+        onCheckForUpdates={() => void checkForNativeUpdate(true)}
         onClose={() => setSettingsOpen(false)}
       />
+
+      {availableUpdate && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="app-update-heading"
+        >
+          <div className="w-full max-w-sm rounded-3xl theme-surface border p-6 shadow-2xl">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-2">
+              <img src="/logo.png" alt="RSS Liquid Flow" className="h-full w-full object-contain" />
+            </div>
+            <h2 id="app-update-heading" className="text-center font-display text-xl font-bold theme-ink">
+              Update available
+            </h2>
+            <p className="mt-2 text-center text-sm theme-ink-secondary">
+              RSS Liquid Flow Pro {availableUpdate.versionName ?? ''} is ready. Your game progress is kept.
+              You can install now or continue playing and update later.
+            </p>
+            <button
+              type="button"
+              disabled={updateBusy}
+              onClick={async () => {
+                setUpdateBusy(true);
+                try {
+                  await downloadNativeUpdate(availableUpdate);
+                } catch (error) {
+                  console.warn('RSS app update download failed:', error);
+                  showToast('Update download failed. Please try again later.');
+                } finally {
+                  setUpdateBusy(false);
+                }
+              }}
+              className="mt-5 w-full min-h-[48px] rounded-2xl btn-tactile-emerald text-white font-display font-bold disabled:opacity-60"
+            >
+              {updateBusy ? 'Downloading update…' : 'Update now'}
+            </button>
+            <button
+              type="button"
+              disabled={updateBusy}
+              onClick={() => setAvailableUpdate(null)}
+              className="mt-2 w-full min-h-[44px] rounded-2xl theme-surface-muted border font-semibold theme-ink disabled:opacity-60"
+            >
+              Later
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showLaunchSplash && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-[#090b2b]">
+          <div className="flex h-36 w-36 items-center justify-center rounded-[2rem] bg-white p-4 shadow-2xl">
+            <img src="/logo.png" alt="RSS Liquid Flow logo" className="h-full w-full object-contain" />
+          </div>
+          <p className="font-display text-xl font-bold tracking-wide text-white">RSS LIQUID FLOW</p>
+        </div>
+      )}
 
       <OfflineIndicator />
 

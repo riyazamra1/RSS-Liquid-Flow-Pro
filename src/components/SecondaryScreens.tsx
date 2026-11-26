@@ -665,8 +665,9 @@ export const SettingsModal: React.FC<{
   open: boolean;
   settings: GameSettings;
   onUpdate: (next: GameSettings) => void;
+  onCheckForUpdates: () => void;
   onClose: () => void;
-}> = ({ open, settings, onUpdate, onClose }) => {
+}> = ({ open, settings, onUpdate, onCheckForUpdates, onClose }) => {
   if (!open) return null;
 
   const toggle = (
@@ -876,9 +877,16 @@ export const SettingsModal: React.FC<{
             </label>
             <p className="text-xs theme-ink-secondary leading-relaxed">
               {settings.autoUpdate
-                ? 'Check and download updates automatically. Android will ask you to approve installation.'
-                : 'Check for updates automatically, then ask before downloading and installing.'}
+                ? 'Check automatically and notify you in the game. You choose when to download and install.'
+                : 'Automatic checks are off. You can check for updates manually at any time.'}
             </p>
+            <button
+              type="button"
+              onClick={onCheckForUpdates}
+              className="w-full min-h-[40px] rounded-xl theme-surface border text-sm font-bold theme-ink cursor-pointer"
+            >
+              Check for updates
+            </button>
           </div>
 
           <PWAInstallButton fullWidth />
