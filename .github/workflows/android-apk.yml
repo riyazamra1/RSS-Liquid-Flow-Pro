@@ -71,7 +71,7 @@ jobs:
         run: |
           mkdir -p assets
           cp public/logo.png assets/logo.png
-          npx capacitor-assets generate --android --iconBackgroundColor "#090b2b" --splashBackgroundColor "#090b2b" --logoSplashScale 0.3
+          npx capacitor-assets generate --android --iconBackgroundColor "#ffffff" --splashBackgroundColor "#090b2b" --logoSplashScale 0.3
 
       - name: Sync web assets into Android project
         run: npx cap sync android
