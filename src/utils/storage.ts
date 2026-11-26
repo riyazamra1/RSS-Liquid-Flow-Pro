@@ -359,6 +359,7 @@ export function loadSettings(): GameSettings {
     reduceMotion: false,
     showHints: true,
     autoAdvance: true,
+    autoUpdate: true,
     mode: 'relaxed',
     theme: 'botanical',
   };
