@@ -670,7 +670,7 @@ export const SettingsModal: React.FC<{
   if (!open) return null;
 
   const toggle = (
-    key: keyof Pick<GameSettings, 'sfx' | 'vibration' | 'reduceMotion' | 'showHints' | 'autoAdvance'>
+    key: keyof Pick<GameSettings, 'sfx' | 'vibration' | 'reduceMotion' | 'showHints' | 'autoAdvance' | 'autoUpdate'>
   ) => {
     onUpdate({ ...settings, [key]: !settings[key] });
   };
@@ -862,6 +862,23 @@ export const SettingsModal: React.FC<{
               <option value="expert">Expert</option>
               <option value="master">Master</option>
             </select>
+          </div>
+
+          <div className="rounded-2xl theme-surface-muted border p-3 space-y-1.5">
+            <label className="flex items-center justify-between min-h-[36px] cursor-pointer">
+              <span className="text-sm font-semibold theme-ink">Automatic app updates</span>
+              <input
+                type="checkbox"
+                checked={settings.autoUpdate}
+                onChange={() => toggle('autoUpdate')}
+                className="w-5 h-5 accent-[#E55A3C] cursor-pointer"
+              />
+            </label>
+            <p className="text-xs theme-ink-secondary leading-relaxed">
+              {settings.autoUpdate
+                ? 'Check and download updates automatically. Android will ask you to approve installation.'
+                : 'Check for updates automatically, then ask before downloading and installing.'}
+            </p>
           </div>
 
           <PWAInstallButton fullWidth />
