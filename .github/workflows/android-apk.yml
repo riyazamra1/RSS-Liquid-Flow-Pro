@@ -9,6 +9,7 @@ on:
       - "capacitor.config.json"
       - "vite.config.ts"
       - "index.html"
+      - "public/**"
       - "src/**"
       - ".github/workflows/android-apk.yml"
 
@@ -52,13 +53,19 @@ jobs:
 
       - name: Install web and Capacitor dependencies
         run: |
-          npm install --legacy-peer-deps --no-save --no-package-lock --no-audit --no-fund @capacitor/core@7.4.3 @capacitor/android@7.4.3 @capacitor/cli@7.4.3
+          npm install --legacy-peer-deps --no-save --no-package-lock --no-audit --no-fund @capacitor/core@7.4.3 @capacitor/android@7.4.3 @capacitor/cli@7.4.3 @capacitor/assets@3.0.5
 
       - name: Build web application
         run: npm run build
 
       - name: Generate native Android project
         run: npx cap add android
+
+      - name: Generate RSS Liquid Flow app icon and splash screen
+        run: |
+          mkdir -p assets
+          cp public/logo.png assets/logo.png
+          npx capacitor-assets generate --android --iconBackgroundColor "#090b2b" --splashBackgroundColor "#090b2b" --logoSplashScale 0.3
 
       - name: Sync web assets into Android project
         run: npx cap sync android
