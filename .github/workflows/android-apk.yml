@@ -108,7 +108,7 @@ jobs:
         run: |
           APK=android/app/build/outputs/apk/release/app-release.apk
           jarsigner -verify -verbose -certs "$APK" >/dev/null
-          keytool -printcert -jarfile "$APK" | grep -q "RSS Liquid Flow Pro"
+          keytool -printcert -jarfile "$APK" | grep -q "CN=Razeen Secure Solution"
           sha256sum "$APK"
 
       - name: Upload signed APK artifact
