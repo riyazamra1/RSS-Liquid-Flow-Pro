@@ -50,6 +50,8 @@ import {
 } from './utils/storage';
 import { applyThemeToDocument } from './utils/themes';
 import { AvailableUpdate, checkNativeUpdate, downloadNativeUpdate } from './utils/appUpdater';
+import { AuthScreen } from './components/AuthScreen';
+import { RssPlayerSession, clearPlayerSession, isGuestMode, readPlayerSession, savePlayerSession, setGuestMode, validatePlayerSession } from './utils/rssAuth';
 
 export default function App() {
   const [progress, setProgress] = useState<PlayerProgress>(() => loadProgress());
@@ -68,6 +70,9 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [availableUpdate, setAvailableUpdate] = useState<AvailableUpdate | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [playerSession, setPlayerSession] = useState<RssPlayerSession | null>(null);
+  const [guestMode, setGuestModeState] = useState(false);
 
   const todayKey = formatDateKey();
 
@@ -78,6 +83,28 @@ export default function App() {
   useEffect(() => {
     applyThemeToDocument(settings.theme);
   }, [settings.theme]);
+
+  useEffect(() => {
+    let active = true;
+    const stored = readPlayerSession();
+    if (!stored) {
+      setGuestModeState(isGuestMode());
+      setAuthReady(true);
+      return () => { active = false; };
+    }
+    void validatePlayerSession(stored.token).then((user) => {
+      if (!active) return;
+      const refreshed = { ...stored, user };
+      savePlayerSession(refreshed);
+      setPlayerSession(refreshed);
+    }).catch(() => {
+      clearPlayerSession();
+      if (active) setPlayerSession(null);
+    }).finally(() => {
+      if (active) setAuthReady(true);
+    });
+    return () => { active = false; };
+  }, []);
 
   // The boot splash is rendered by index.html before React starts.
   // Remove it only after the game shell has committed its first render.
@@ -434,6 +461,11 @@ export default function App() {
   };
 
   const isPlaying = screen === 'play';
+
+  if (!authReady) return <div className="min-h-screen bg-[#090b2b]" aria-label="Loading RSS Liquid Flow" />;
+  if (!playerSession && !guestMode) {
+    return <AuthScreen onAuthenticated={(session) => { setPlayerSession(session); setGuestModeState(false); }} onPlayAsGuest={() => { setGuestMode(); setGuestModeState(true); }} />;
+  }
 
   return (
     <div
