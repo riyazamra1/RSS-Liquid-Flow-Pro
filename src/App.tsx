@@ -92,6 +92,9 @@ export default function App() {
       setAuthReady(true);
       return () => { active = false; };
     }
+    // Restore a valid unexpired local session immediately; validate it with RSS Core in the background.
+    setPlayerSession(stored);
+    setAuthReady(true);
     void validatePlayerSession(stored.token).then((user) => {
       if (!active) return;
       const refreshed = { ...stored, user };
@@ -100,19 +103,17 @@ export default function App() {
     }).catch(() => {
       clearPlayerSession();
       if (active) setPlayerSession(null);
-    }).finally(() => {
-      if (active) setAuthReady(true);
     });
     return () => { active = false; };
   }, []);
 
-  // The boot splash is rendered by index.html before React starts.
-  // Remove it only after the game shell has committed its first render.
+  // Keep the HTML boot splash visible while the saved player session is restored.
   useEffect(() => {
+    if (!authReady) return;
     const splash = document.getElementById('rss-boot-splash');
     if (!splash) return;
     requestAnimationFrame(() => requestAnimationFrame(() => splash.remove()));
-  }, []);
+  }, [authReady]);
 
   // Automatic checks are non-blocking. An available update is presented in-game;
   // downloading and opening Android's installer always requires an explicit tap.
