@@ -107,12 +107,18 @@ export default function App() {
     return () => { active = false; };
   }, []);
 
-  // Keep the HTML boot splash visible while the saved player session is restored.
+  // Keep the branded boot splash visible for at least 3 seconds from the first HTML paint.
+  // Also wait until the app has restored its local authentication state before removing it.
   useEffect(() => {
     if (!authReady) return;
     const splash = document.getElementById('rss-boot-splash');
     if (!splash) return;
-    requestAnimationFrame(() => requestAnimationFrame(() => splash.remove()));
+    const startedAt = Number(document.documentElement.dataset.rssSplashStartedAt || Date.now());
+    const remainingMs = Math.max(0, 3000 - (Date.now() - startedAt));
+    const timer = window.setTimeout(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => splash.remove()));
+    }, remainingMs);
+    return () => window.clearTimeout(timer);
   }, [authReady]);
 
   // Automatic checks are non-blocking. An available update is presented in-game;
