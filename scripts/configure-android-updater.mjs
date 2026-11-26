@@ -2,37 +2,39 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve('android');
-const files = [];
+const mainActivities = [];
 function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full);
-    else if (entry.name === 'MainActivity.kt') files.push(full);
+    else if (entry.name === 'MainActivity.java' || entry.name === 'MainActivity.kt') mainActivities.push(full);
   }
 }
 walk(path.join(root, 'app/src/main'));
-if (files.length !== 1) throw new Error('Expected one generated MainActivity.kt');
-const activityPath = files[0];
+if (mainActivities.length !== 1) throw new Error('Expected exactly one generated MainActivity source');
+const activityPath = mainActivities[0];
 let activity = fs.readFileSync(activityPath, 'utf8');
 const pkg = activity.match(/^package\s+([A-Za-z0-9_.]+)/m)?.[1];
 if (!pkg) throw new Error('Cannot read Android package name');
-const pluginSource = fs.readFileSync('native/android/RssAppUpdaterPlugin.kt', 'utf8')
-  .replace(/^package .*$/m, 'package ' + pkg);
+const pluginSource = fs.readFileSync('native/android/RssAppUpdaterPlugin.java', 'utf8')
+  .replace(/^package .*$/m, 'package ' + pkg + ';');
 const pluginDir = path.join(root, 'app/src/main/java', ...pkg.split('.'));
 fs.mkdirSync(pluginDir, { recursive: true });
-fs.writeFileSync(path.join(pluginDir, 'RssAppUpdaterPlugin.kt'), pluginSource);
+fs.writeFileSync(path.join(pluginDir, 'RssAppUpdaterPlugin.java'), pluginSource);
 
-if (!activity.includes('RssAppUpdaterPlugin::class.java')) {
-  if (!activity.includes('import android.os.Bundle')) {
-    activity = activity.replace(/(package [^\n]+\n)/, '$1\nimport android.os.Bundle\n');
-  }
-  if (/class MainActivity\s*:\s*BridgeActivity\s*\(\s*\)/.test(activity)) {
-    activity = activity.replace(/class MainActivity\s*:\s*BridgeActivity\s*\(\s*\)/,
-      'class MainActivity : BridgeActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        registerPlugin(RssAppUpdaterPlugin::class.java)\n        super.onCreate(savedInstanceState)\n    }\n}');
-  } else if (/override fun onCreate\(savedInstanceState: Bundle\?\)\s*\{/.test(activity)) {
-    activity = activity.replace(/(override fun onCreate\(savedInstanceState: Bundle\?\)\s*\{)/, '$1\n        registerPlugin(RssAppUpdaterPlugin::class.java)');
+if (!activity.includes('RssAppUpdaterPlugin.class')) {
+  if (activityPath.endsWith('.java')) {
+    if (!activity.includes('import android.os.Bundle;')) {
+      activity = activity.replace(/(package [^\n]+;\s*)/, '$1\nimport android.os.Bundle;\n');
+    }
+    activity = activity.replace(/public class MainActivity extends BridgeActivity\s*\{\s*\}/,
+      'public class MainActivity extends BridgeActivity {\\n    @Override\\n    public void onCreate(Bundle savedInstanceState) {\\n        registerPlugin(RssAppUpdaterPlugin.class);\\n        super.onCreate(savedInstanceState);\\n    }\\n}');
+    if (!activity.includes('RssAppUpdaterPlugin.class')) throw new Error('Could not register updater in Java MainActivity');
   } else {
-    throw new Error('Unsupported generated MainActivity template; updater plugin was not registered');
+    if (!activity.includes('import android.os.Bundle')) activity = activity.replace(/(package [^\n]+\n)/, '$1\nimport android.os.Bundle\n');
+    activity = activity.replace(/class MainActivity\s*:\s*BridgeActivity\s*\(\s*\)/,
+      'class MainActivity : BridgeActivity() {\\n    override fun onCreate(savedInstanceState: Bundle?) {\\n        registerPlugin(RssAppUpdaterPlugin::class.java)\\n        super.onCreate(savedInstanceState)\\n    }\\n}');
+    if (!activity.includes('RssAppUpdaterPlugin::class.java')) throw new Error('Could not register updater in Kotlin MainActivity');
   }
 }
 fs.writeFileSync(activityPath, activity);
