@@ -62,5 +62,31 @@ if (!gradle.includes('rssBuildVersionCode')) {
   gradle = gradle.replace(/versionCode\s+\d+/, 'versionCode rssBuildVersionCode');
   gradle = gradle.replace(/versionName\s+"[^"]+"/, 'versionName "1.0.\${rssBuildVersionCode}"');
 }
+if (!gradle.includes('rssPersistentReleaseSigning')) {
+  const signing = `
+    signingConfigs {
+        release {
+            def rssStoreFile = System.getenv("RSS_ANDROID_KEYSTORE_FILE")
+            def rssStorePassword = System.getenv("RSS_ANDROID_STORE_PASSWORD")
+            def rssKeyAlias = System.getenv("RSS_ANDROID_KEY_ALIAS")
+            def rssKeyPassword = System.getenv("RSS_ANDROID_KEY_PASSWORD")
+            if (!rssStoreFile || !rssStorePassword || !rssKeyAlias || !rssKeyPassword) {
+                throw new GradleException("Persistent Android release signing secrets are required")
+            }
+            storeFile file(rssStoreFile)
+            storePassword rssStorePassword
+            keyAlias rssKeyAlias
+            keyPassword rssKeyPassword
+        }
+    }
+    ext.rssPersistentReleaseSigning = true
+`;
+  if (!gradle.includes('buildTypes {')) throw new Error('Generated Gradle file has no buildTypes block');
+  gradle = gradle.replace('buildTypes {', signing + '\n    buildTypes {');
+  const releaseIndex = gradle.indexOf('release {', gradle.indexOf('buildTypes {'));
+  if (releaseIndex < 0) throw new Error('Generated Gradle file has no release build type');
+  const insertAt = releaseIndex + 'release {'.length;
+  gradle = gradle.slice(0, insertAt) + '\n            signingConfig signingConfigs.release' + gradle.slice(insertAt);
+}
 fs.writeFileSync(gradlePath, gradle);
-console.log('Registered RSS native updater, installer provider and build version.');
+console.log('Registered RSS native updater, installer provider, version and persistent release signing.');

@@ -50,6 +50,8 @@ import {
 } from './utils/storage';
 import { applyThemeToDocument } from './utils/themes';
 import { AvailableUpdate, checkNativeUpdate, downloadNativeUpdate } from './utils/appUpdater';
+import { AuthScreen } from './components/AuthScreen';
+import { RssPlayerSession, clearPlayerSession, isGuestMode, readPlayerSession, savePlayerSession, setGuestMode, validatePlayerSession } from './utils/rssAuth';
 
 export default function App() {
   const [progress, setProgress] = useState<PlayerProgress>(() => loadProgress());
@@ -66,9 +68,11 @@ export default function App() {
   const [livesModalOpen, setLivesModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [showLaunchSplash, setShowLaunchSplash] = useState(true);
   const [availableUpdate, setAvailableUpdate] = useState<AvailableUpdate | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [playerSession, setPlayerSession] = useState<RssPlayerSession | null>(null);
+  const [guestMode, setGuestModeState] = useState(false);
 
   const todayKey = formatDateKey();
 
@@ -80,11 +84,42 @@ export default function App() {
     applyThemeToDocument(settings.theme);
   }, [settings.theme]);
 
-  // Keep a short branded launch screen visible after the app shell has rendered.
   useEffect(() => {
-    const splashTimer = window.setTimeout(() => setShowLaunchSplash(false), 1100);
-    return () => window.clearTimeout(splashTimer);
+    let active = true;
+    const stored = readPlayerSession();
+    if (!stored) {
+      setGuestModeState(isGuestMode());
+      setAuthReady(true);
+      return () => { active = false; };
+    }
+    // Restore a valid unexpired local session immediately; validate it with RSS Core in the background.
+    setPlayerSession(stored);
+    setAuthReady(true);
+    void validatePlayerSession(stored.token).then((user) => {
+      if (!active) return;
+      const refreshed = { ...stored, user };
+      savePlayerSession(refreshed);
+      setPlayerSession(refreshed);
+    }).catch(() => {
+      clearPlayerSession();
+      if (active) setPlayerSession(null);
+    });
+    return () => { active = false; };
   }, []);
+
+  // Keep the branded boot splash visible for at least 3 seconds from the first HTML paint.
+  // Also wait until the app has restored its local authentication state before removing it.
+  useEffect(() => {
+    if (!authReady) return;
+    const splash = document.getElementById('rss-boot-splash');
+    if (!splash) return;
+    const startedAt = Number(document.documentElement.dataset.rssSplashStartedAt || Date.now());
+    const remainingMs = Math.max(0, 3000 - (Date.now() - startedAt));
+    const timer = window.setTimeout(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => splash.remove()));
+    }, remainingMs);
+    return () => window.clearTimeout(timer);
+  }, [authReady]);
 
   // Automatic checks are non-blocking. An available update is presented in-game;
   // downloading and opening Android's installer always requires an explicit tap.
@@ -434,6 +469,11 @@ export default function App() {
 
   const isPlaying = screen === 'play';
 
+  if (!authReady) return <div className="min-h-screen bg-[#090b2b]" aria-label="Loading RSS Liquid Flow" />;
+  if (!playerSession && !guestMode) {
+    return <AuthScreen onAuthenticated={(session) => { setPlayerSession(session); setGuestModeState(false); }} onPlayAsGuest={() => { setGuestMode(); setGuestModeState(true); }} />;
+  }
+
   return (
     <div
       className={`relative bg-transparent theme-ink flex flex-col ${
@@ -781,15 +821,6 @@ export default function App() {
               Later
             </button>
           </div>
-        </div>
-      )}
-
-      {showLaunchSplash && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-[#090b2b]">
-          <div className="flex h-36 w-36 items-center justify-center rounded-[2rem] bg-white p-4 shadow-2xl">
-            <img src="/logo.png" alt="RSS Liquid Flow logo" className="h-full w-full object-contain" />
-          </div>
-          <p className="font-display text-xl font-bold tracking-wide text-white">RSS LIQUID FLOW</p>
         </div>
       )}
 

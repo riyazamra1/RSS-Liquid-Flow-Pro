@@ -110,11 +110,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             {/* Left: Player Emblem, Current Level & World Identity */}
             <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
-              <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl theme-surface-muted border flex items-center justify-center shrink-0 shadow-xs">
+              <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-2xl theme-surface-muted border flex items-center justify-center shrink-0 shadow-xs">
                 <img
                   src="/logo.png"
                   alt="RSS Liquid Flow"
-                  className="w-11 h-11 sm:w-12 sm:h-12 object-contain drop-shadow-xs"
+                  className="w-9 h-9 sm:w-10 sm:h-10 object-contain drop-shadow-xs"
                 />
               </div>
 
