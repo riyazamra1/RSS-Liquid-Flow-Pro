@@ -11,6 +11,9 @@ on:
       - "index.html"
       - "public/**"
       - "src/**"
+      - "native/**"
+      - "scripts/**"
+      - "package.json"
       - ".github/workflows/android-apk.yml"
 
 concurrency:
@@ -61,6 +64,9 @@ jobs:
       - name: Generate native Android project
         run: npx cap add android
 
+      - name: Configure native Android updater
+        run: node scripts/configure-android-updater.mjs
+
       - name: Generate RSS Liquid Flow app icon and splash screen
         run: |
           mkdir -p assets
@@ -84,16 +90,28 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish latest APK release
+      - name: Publish latest APK and update metadata
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG=rss-liquid-flow-pro-latest
           REPO=${GITHUB_REPOSITORY}
           APK=android/app/build/outputs/apk/debug/app-debug.apk
+          VERSION_CODE=${GITHUB_RUN_NUMBER}
+          VERSION_NAME=1.0.${VERSION_CODE}
+          APK_SHA256=$(sha256sum "$APK" | awk '{print $1}')
+          APK_URL="https://github.com/${REPO}/releases/download/${TAG}/app-debug.apk"
+          cat > update.json <<EOF
+          {
+            "versionCode": ${VERSION_CODE},
+            "versionName": "${VERSION_NAME}",
+            "apkUrl": "${APK_URL}",
+            "sha256": "${APK_SHA256}"
+          }
+          EOF
           if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" --clobber --repo "$REPO"
-            gh release edit "$TAG" --title "RSS Liquid Flow Pro — Latest Android APK" --notes "Latest Android APK built from the main branch. This package contains the original Google AI Studio React/Vite game wrapped with Capacitor. Gameplay source is not rewritten for Android." --latest --repo "$REPO"
+            gh release edit "$TAG" --title "RSS Liquid Flow Pro — Latest Android APK" --notes "Latest Android APK with native in-app update checks. Android will request user confirmation for package installation." --latest --repo "$REPO"
           else
-            gh release create "$TAG" "$APK" --title "RSS Liquid Flow Pro — Latest Android APK" --notes "Latest Android APK built from the main branch. This package contains the original Google AI Studio React/Vite game wrapped with Capacitor. Gameplay source is not rewritten for Android." --latest --target "$GITHUB_SHA" --repo "$REPO"
+            gh release create "$TAG" --title "RSS Liquid Flow Pro — Latest Android APK" --notes "Latest Android APK with native in-app update checks. Android will request user confirmation for package installation." --latest --target "$GITHUB_SHA" --repo "$REPO"
           fi
+          gh release upload "$TAG" "$APK" update.json --clobber --repo "$REPO"
