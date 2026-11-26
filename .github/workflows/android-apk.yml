@@ -86,7 +86,8 @@ jobs:
         run: |
           test -n "$ANDROID_SIGNING_KEYSTORE_BASE64" || { echo "Missing ANDROID_SIGNING_KEYSTORE_BASE64"; exit 1; }
           install -d -m 700 "$RUNNER_TEMP/rss-android-signing"
-          printf '%s' "$ANDROID_SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/rss-android-signing/release.jks"
+          KEYSTORE_B64="$(printf '%s' "$ANDROID_SIGNING_KEYSTORE_BASE64" | sed -e 's/^ANDROID_SIGNING_KEYSTORE_BASE64=//' -e 's/^"//' -e 's/"$//' | tr -d '[:space:]')"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/rss-android-signing/release.jks"
           chmod 600 "$RUNNER_TEMP/rss-android-signing/release.jks"
           test -s "$RUNNER_TEMP/rss-android-signing/release.jks"
           echo "RSS_ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/rss-android-signing/release.jks" >> "$GITHUB_ENV"
