@@ -28,12 +28,12 @@ if (!activity.includes('RssAppUpdaterPlugin.class')) {
       activity = activity.replace(/(package [^\n]+;\s*)/, '$1\nimport android.os.Bundle;\n');
     }
     activity = activity.replace(/public class MainActivity extends BridgeActivity\s*\{\s*\}/,
-      'public class MainActivity extends BridgeActivity {\\n    @Override\\n    public void onCreate(Bundle savedInstanceState) {\\n        registerPlugin(RssAppUpdaterPlugin.class);\\n        super.onCreate(savedInstanceState);\\n    }\\n}');
+      'public class MainActivity extends BridgeActivity {\n    @Override\n    public void onCreate(Bundle savedInstanceState) {\n        registerPlugin(RssAppUpdaterPlugin.class);\n        super.onCreate(savedInstanceState);\n    }\n}');
     if (!activity.includes('RssAppUpdaterPlugin.class')) throw new Error('Could not register updater in Java MainActivity');
   } else {
     if (!activity.includes('import android.os.Bundle')) activity = activity.replace(/(package [^\n]+\n)/, '$1\nimport android.os.Bundle\n');
     activity = activity.replace(/class MainActivity\s*:\s*BridgeActivity\s*\(\s*\)/,
-      'class MainActivity : BridgeActivity() {\\n    override fun onCreate(savedInstanceState: Bundle?) {\\n        registerPlugin(RssAppUpdaterPlugin::class.java)\\n        super.onCreate(savedInstanceState)\\n    }\\n}');
+      'class MainActivity : BridgeActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        registerPlugin(RssAppUpdaterPlugin::class.java)\n        super.onCreate(savedInstanceState)\n    }\n}');
     if (!activity.includes('RssAppUpdaterPlugin::class.java')) throw new Error('Could not register updater in Kotlin MainActivity');
   }
 }
