@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - fix/boot-splash-and-rss-auth-flow
     paths:
       - "capacitor.config.json"
       - "vite.config.ts"
