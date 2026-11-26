@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Eye, EyeOff, Gamepad2, LockKeyhole, Mail, UserRound } from 'lucide-react';
+import { Eye, EyeOff, Gamepad2, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import {
   loginPlayer, registerPlayer, resendPlayerVerification, requestPlayerPasswordReset,
   verifyPlayerPasswordReset, resetPlayerPassword, savePlayerSession, RssPlayerSession,
@@ -18,7 +18,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthenticated, onPlayAsGuest }) 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [code, setCode] = useState('');
-  const [resetToken, setResetToken] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -46,7 +45,6 @@ export const AuthScreen: React.FC<Props> = ({ onAuthenticated, onPlayAsGuest }) 
       setMessage('If an account exists, a six-digit reset code has been sent to your email.');
     } else if (view === 'reset') {
       const verified = await verifyPlayerPasswordReset(email.trim(), code.trim());
-      setResetToken(verified.reset_token);
       await resetPlayerPassword(email.trim(), verified.reset_token, password);
       setView('login');
       setPassword('');
