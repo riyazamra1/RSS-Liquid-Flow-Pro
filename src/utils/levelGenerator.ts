@@ -657,6 +657,13 @@ export interface LevelScoreBreakdown {
   completeStar: boolean;
   timeBalanceStar: boolean;
   movesBalanceStar: boolean;
+  moveEfficiencyStar: boolean;
+  speedStar: boolean;
+  movesUsed: number;
+  moveTarget: number;
+  moveEfficiencyPct: number;
+  elapsedSec: number;
+  speedTargetSec: number;
   remainingTimeSec: number;
   remainingMoves: number;
   baseScore: number;
@@ -665,27 +672,46 @@ export interface LevelScoreBreakdown {
   totalScore: number;
 }
 
+export function getStarMasteryTargets(moveLimit: number, timeLimit: number): {
+  moveTarget: number;
+  speedTargetSec: number;
+} {
+  return {
+    moveTarget: Math.max(1, Math.floor(moveLimit * 0.85)),
+    speedTargetSec: Math.max(15, Math.floor(timeLimit * 0.65)),
+  };
+}
+
 /**
- * Exact 3-Star Policy & Score Conversion:
- * - Star 1: Level Complete (always 1 star on clear)
- * - Star 2: Time Balance (1 star if remaining time > 0)
- * - Star 3: Moves Balance (1 star if remaining moves > 0)
- * - Remaining time (×10 pts/sec) + remaining moves (×25 pts/move) convert directly into Level Score.
+ * 1-3 Star Mastery Policy (Move Efficiency & Speed):
+ * - Star 1: Level Complete (always earned on clear)
+ * - Star 2: Move Efficiency (solve within par moveTarget, <= 85% of move budget)
+ * - Star 3: Speed Mastery (solve within speedTargetSec, <= 65% of time limit)
  */
 export function evaluateLevelResult(
   movesUsed: number,
   moveBudget: number,
-  remainingTimeSec: number
+  remainingTimeSec: number,
+  totalTimeLimit = 75
 ): LevelScoreBreakdown {
   const safeRemainingTime = Math.max(0, Math.floor(remainingTimeSec));
   const safeRemainingMoves = Math.max(0, Math.floor(moveBudget - movesUsed));
+  const safeTotalTime = Math.max(15, Math.floor(totalTimeLimit));
+  const elapsedSec = Math.max(0, safeTotalTime - safeRemainingTime);
+
+  const { moveTarget, speedTargetSec } = getStarMasteryTargets(moveBudget, safeTotalTime);
 
   const completeStar = true;
-  const timeBalanceStar = safeRemainingTime > 0;
-  const movesBalanceStar = safeRemainingMoves > 0;
+  const moveEfficiencyStar = movesUsed <= moveTarget;
+  const speedStar = safeRemainingTime > 0 && elapsedSec <= speedTargetSec;
 
   const stars =
-    (completeStar ? 1 : 0) + (timeBalanceStar ? 1 : 0) + (movesBalanceStar ? 1 : 0);
+    (completeStar ? 1 : 0) + (moveEfficiencyStar ? 1 : 0) + (speedStar ? 1 : 0);
+
+  const moveEfficiencyPct = Math.min(
+    100,
+    Math.max(0, Math.round((moveTarget / Math.max(1, movesUsed)) * 100))
+  );
 
   const baseScore = 12500;
   const timeScore = safeRemainingTime * 120;
@@ -696,8 +722,15 @@ export function evaluateLevelResult(
   return {
     stars,
     completeStar,
-    timeBalanceStar,
-    movesBalanceStar,
+    timeBalanceStar: speedStar,
+    movesBalanceStar: moveEfficiencyStar,
+    moveEfficiencyStar,
+    speedStar,
+    movesUsed,
+    moveTarget,
+    moveEfficiencyPct,
+    elapsedSec,
+    speedTargetSec,
     remainingTimeSec: safeRemainingTime,
     remainingMoves: safeRemainingMoves,
     baseScore,
@@ -707,8 +740,13 @@ export function evaluateLevelResult(
   };
 }
 
-export function calculateStars(moves: number, moveLimit: number, remainingTimeSec = 1): number {
-  return evaluateLevelResult(moves, moveLimit, remainingTimeSec).stars;
+export function calculateStars(
+  moves: number,
+  moveLimit: number,
+  remainingTimeSec = 1,
+  totalTimeLimit = 75
+): number {
+  return evaluateLevelResult(moves, moveLimit, remainingTimeSec, totalTimeLimit).stars;
 }
 
 export function getLevelObjectiveText(level: number): string {

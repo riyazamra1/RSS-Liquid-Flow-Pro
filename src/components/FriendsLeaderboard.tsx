@@ -84,11 +84,11 @@ export const FriendsLeaderboard: React.FC<FriendsLeaderboardProps> = ({
         <button
           type="button"
           onClick={() => setAdding((v) => !v)}
-          aria-label={adding ? 'Close add friend form' : 'Add friend'}
+          aria-label={adding ? 'Close add friend form' : 'Add real friend'}
           className="min-h-[34px] px-2.5 py-1 rounded-xl theme-surface-muted border text-xs font-bold inline-flex items-center gap-1 cursor-pointer hover:opacity-90 whitespace-nowrap shrink-0"
         >
           {adding ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-          <span>{adding ? 'Close' : 'Add'}</span>
+          <span>{adding ? 'Close' : 'Add Friend'}</span>
         </button>
       </div>
 
@@ -124,73 +124,81 @@ export const FriendsLeaderboard: React.FC<FriendsLeaderboardProps> = ({
         </form>
       )}
 
-      <div className={`space-y-2 ${compact ? 'max-h-[260px] overflow-y-auto pr-0.5' : ''}`}>
-        {ranked.map((entry, idx) => {
-          const rank = idx + 1;
-          const quota = entry.friend
-            ? getFriendDailyQuota(entry.friend, referenceDateKey)
-            : null;
-          const initials = entry.name.replace(' (You)', '').slice(0, 2).toUpperCase();
+      {progress.friends.length === 0 ? (
+        <div className="py-6 px-4 text-center rounded-2xl theme-surface-muted border border-dashed theme-border">
+          <p className="text-xs theme-ink-secondary">
+            No friends added yet. Click <strong className="theme-ink">Add Friend</strong> above to add real friends and send lives.
+          </p>
+        </div>
+      ) : (
+        <div className={`space-y-2 ${compact ? 'max-h-[260px] overflow-y-auto pr-0.5' : ''}`}>
+          {ranked.map((entry, idx) => {
+            const rank = idx + 1;
+            const quota = entry.friend
+              ? getFriendDailyQuota(entry.friend, referenceDateKey)
+              : null;
+            const initials = entry.name.replace(' (You)', '').slice(0, 2).toUpperCase();
 
-          return (
-            <div
-              key={entry.id}
-              className={`rounded-2xl px-2.5 py-2 border flex items-center justify-between gap-2 transition-colors ${
-                entry.isPlayer
-                  ? 'bg-[#FFF3CE]/90 dark:bg-[#173D57]/90 border-[#E5B043] dark:border-[#2BD4C5]'
-                  : 'theme-surface-muted'
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => onJumpToLevel?.(entry.level)}
-                className="flex items-center gap-2.5 min-w-0 text-left cursor-pointer"
-                title={`View Level ${entry.level} on map`}
+            return (
+              <div
+                key={entry.id}
+                className={`rounded-2xl px-2.5 py-2 border flex items-center justify-between gap-2 transition-colors ${
+                  entry.isPlayer
+                    ? 'bg-[#FFF3CE]/90 dark:bg-[#173D57]/90 border-[#E5B043] dark:border-[#2BD4C5]'
+                    : 'theme-surface-muted'
+                }`}
               >
-                <span className="w-5 text-center font-display text-xs font-bold theme-ink-secondary tabular-nums shrink-0">
-                  {rank === 1 ? (
-                    <Crown className="w-4 h-4 text-[#E8A317] inline" />
-                  ) : (
-                    `#${rank}`
-                  )}
-                </span>
-
-                <span
-                  className="w-8 h-8 rounded-full border-2 border-white/90 text-white font-display text-xs font-bold flex items-center justify-center shadow-xs shrink-0"
-                  style={{ backgroundColor: entry.avatarColor }}
+                <button
+                  type="button"
+                  onClick={() => onJumpToLevel?.(entry.level)}
+                  className="flex items-center gap-2.5 min-w-0 text-left cursor-pointer"
+                  title={`View Level ${entry.level} on map`}
                 >
-                  {initials}
-                </span>
+                  <span className="w-5 text-center font-display text-xs font-bold theme-ink-secondary tabular-nums shrink-0">
+                    {rank === 1 ? (
+                      <Crown className="w-4 h-4 text-[#E8A317] inline" />
+                    ) : (
+                      `#${rank}`
+                    )}
+                  </span>
 
-                <div className="min-w-0">
-                  <div className="font-display text-xs sm:text-sm font-bold theme-ink truncate">
-                    {entry.name}
-                  </div>
-                  <div className="text-[11px] font-semibold theme-ink-secondary tabular-nums flex items-center gap-1">
-                    <Trophy className="w-3 h-3 text-[#E8A317]" />
-                    <span>Level {entry.level}</span>
-                  </div>
-                </div>
-              </button>
-
-              {entry.friend && quota && (
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => onSendLife(entry.friend!.id)}
-                    disabled={!quota.canSend}
-                    title={`Send 1 life (${quota.sentToday}/${MAX_FRIEND_LIVES_PER_DAY} today)`}
-                    className="min-h-[32px] px-2.5 py-1 rounded-xl bg-[#FBEBD0] dark:bg-[#183C57] hover:opacity-90 disabled:opacity-45 text-[#7E4B0A] dark:text-[#7CE8FF] text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer tabular-nums whitespace-nowrap"
+                  <span
+                    className="w-8 h-8 rounded-full border-2 border-white/90 text-white font-display text-xs font-bold flex items-center justify-center shadow-xs shrink-0"
+                    style={{ backgroundColor: entry.avatarColor }}
                   >
-                    <Send className="w-3 h-3" />
-                    <span>Send ({quota.remainingSend}/{MAX_FRIEND_LIVES_PER_DAY})</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                    {initials}
+                  </span>
+
+                  <div className="min-w-0">
+                    <div className="font-display text-xs sm:text-sm font-bold theme-ink truncate">
+                      {entry.name}
+                    </div>
+                    <div className="text-[11px] font-semibold theme-ink-secondary tabular-nums flex items-center gap-1">
+                      <Trophy className="w-3 h-3 text-[#E8A317]" />
+                      <span>Level {entry.level}</span>
+                    </div>
+                  </div>
+                </button>
+
+                {entry.friend && quota && (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => onSendLife(entry.friend!.id)}
+                      disabled={!quota.canSend}
+                      title={`Send 1 life (${quota.sentToday}/${MAX_FRIEND_LIVES_PER_DAY} today)`}
+                      className="min-h-[32px] px-2.5 py-1 rounded-xl bg-[#FBEBD0] dark:bg-[#183C57] hover:opacity-90 disabled:opacity-45 text-[#7E4B0A] dark:text-[#7CE8FF] text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer tabular-nums whitespace-nowrap"
+                    >
+                      <Send className="w-3 h-3" />
+                      <span>Send ({quota.remainingSend}/{MAX_FRIEND_LIVES_PER_DAY})</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 };

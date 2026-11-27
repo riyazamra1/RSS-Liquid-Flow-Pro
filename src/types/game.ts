@@ -47,6 +47,44 @@ export interface FriendEntry {
   receivedDates: Record<string, number>; // YYYY-MM-DD -> count received today (max 2)
 }
 
+export interface DailyMissionProgress {
+  dateKey: string; // YYYY-MM-DD
+  levelsSolved: number;
+  coinsEarned: number;
+  livesGifted: number;
+  claimedMissionIds: string[];
+}
+
+export type SpinWheelCategory = 'coins' | 'gift' | 'luck';
+
+export interface SpinWheelSegment {
+  id: string;
+  label: string;
+  shortLabel: string;
+  category: SpinWheelCategory;
+  coins: number;
+  lives: number;
+  weight: number;
+  color: string;
+  textColor: string;
+}
+
+export interface SpinWheelRecord {
+  lastFreeSpinDate: string | null; // YYYY-MM-DD
+  totalSpins: number;
+  lastOutcomeLabel?: string;
+}
+
+export interface DailyMissionDefinition {
+  id: 'solve_levels' | 'earn_coins' | 'gift_lives';
+  title: string;
+  description: string;
+  metric: 'levelsSolved' | 'coinsEarned' | 'livesGifted';
+  target: number;
+  rewardCoins: number;
+  rewardXp: number;
+}
+
 export interface PlayerProgress {
   playerName: string;
   currentLevel: number;
@@ -55,7 +93,10 @@ export interface PlayerProgress {
   completedLevels: Record<string, boolean>;
   levelStars: Record<string, number>;
   levelScores: Record<string, number>;
+  levelBestTimes: Record<string, number>;
+  levelBestMoves: Record<string, number>;
   coins: number;
+  xp: number;
   bestScore: number;
   score: number;
   totalMoves: number;
@@ -67,6 +108,8 @@ export interface PlayerProgress {
   perfectLevels: Record<string, boolean>;
   lastMode: GameMode;
   dailyLogin: DailyLoginRecord;
+  dailyMissions: DailyMissionProgress;
+  spinWheel: SpinWheelRecord;
   friends: FriendEntry[];
 }
 

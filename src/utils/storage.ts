@@ -1,9 +1,13 @@
 import {
   CalculatedDailyReward,
+  DailyMissionDefinition,
+  DailyMissionProgress,
   DailyRewardTier,
   FriendEntry,
   GameSettings,
   PlayerProgress,
+  SpinWheelRecord,
+  SpinWheelSegment,
 } from '../types/game';
 import { ACHIEVEMENTS, GARDEN_PLANTS } from './levelGenerator';
 import { normalizeThemeId } from './themes';
@@ -27,12 +31,7 @@ const FRIEND_AVATAR_COLORS = [
   '#D94929',
 ];
 
-export const DEFAULT_STARTER_FRIENDS: FriendEntry[] = [
-  { id: 'f-maya', name: 'Maya', level: 3, avatarColor: '#E01E37', sentDates: {}, receivedDates: {} },
-  { id: 'f-arjun', name: 'Arjun', level: 7, avatarColor: '#1FA84F', sentDates: {}, receivedDates: {} },
-  { id: 'f-lina', name: 'Lina', level: 12, avatarColor: '#7B2CBF', sentDates: {}, receivedDates: {} },
-  { id: 'f-omar', name: 'Omar', level: 19, avatarColor: '#E59B14', sentDates: {}, receivedDates: {} },
-];
+export const DEFAULT_STARTER_FRIENDS: FriendEntry[] = [];
 
 /**
  * 7-Day Daily Login Reward Schedule granting escalating coins and bonus lives.
@@ -46,6 +45,87 @@ export const DAILY_REWARD_SCHEDULE: DailyRewardTier[] = [
   { day: 6, label: 'Day 6', rewardType: 'bundle', coins: 75, lives: 2 },
   { day: 7, label: 'Day 7', rewardType: 'bundle', coins: 300, lives: 3, highlight: true },
 ];
+
+export const DAILY_MISSIONS_DEFINITIONS: DailyMissionDefinition[] = [
+  {
+    id: 'solve_levels',
+    title: 'Solve 3 levels',
+    description: 'Complete any 3 liquid sorting levels today.',
+    metric: 'levelsSolved',
+    target: 3,
+    rewardCoins: 120,
+    rewardXp: 150,
+  },
+  {
+    id: 'earn_coins',
+    title: 'Earn 500 coins',
+    description: 'Collect 500 coins from puzzles or daily bonuses today.',
+    metric: 'coinsEarned',
+    target: 500,
+    rewardCoins: 150,
+    rewardXp: 200,
+  },
+  {
+    id: 'gift_lives',
+    title: 'Gift 2 lives',
+    description: 'Send 2 lives to your friends today.',
+    metric: 'livesGifted',
+    target: 2,
+    rewardCoins: 100,
+    rewardXp: 125,
+  },
+];
+
+export const XP_PER_LEVEL = 250;
+
+export function getXpLevelInfo(xp: number) {
+  const safeXp = Math.max(0, Math.floor(Number(xp) || 0));
+  const level = Math.floor(safeXp / XP_PER_LEVEL) + 1;
+  const currentLevelXp = safeXp % XP_PER_LEVEL;
+  const progressPct = Math.round((currentLevelXp / XP_PER_LEVEL) * 100);
+  return {
+    totalXp: safeXp,
+    level,
+    currentLevelXp,
+    nextLevelXp: XP_PER_LEVEL,
+    xpToNext: XP_PER_LEVEL - currentLevelXp,
+    progressPct,
+  };
+}
+
+export function normalizeDailyMissions(
+  raw: unknown,
+  dateKey: string = formatDateKey()
+): DailyMissionProgress {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      dateKey,
+      levelsSolved: 0,
+      coinsEarned: 0,
+      livesGifted: 0,
+      claimedMissionIds: [],
+    };
+  }
+  const obj = raw as Record<string, unknown>;
+  if (obj.dateKey !== dateKey) {
+    return {
+      dateKey,
+      levelsSolved: 0,
+      coinsEarned: 0,
+      livesGifted: 0,
+      claimedMissionIds: [],
+    };
+  }
+  return {
+    dateKey,
+    levelsSolved: Math.max(0, Math.floor(Number(obj.levelsSolved) || 0)),
+    coinsEarned: Math.max(0, Math.floor(Number(obj.coinsEarned) || 0)),
+    livesGifted: Math.max(0, Math.floor(Number(obj.livesGifted) || 0)),
+    claimedMissionIds: Array.isArray(obj.claimedMissionIds)
+      ? obj.claimedMissionIds.filter((id): id is string => typeof id === 'string')
+      : [],
+  };
+}
 
 export function formatDateKey(date: Date = new Date()): string {
   const y = date.getFullYear();
@@ -101,15 +181,16 @@ export function recomputeLives(lifeState: { count: number; lastRefillAt: number 
 }
 
 function normalizeFriends(raw: unknown): FriendEntry[] {
-  if (!Array.isArray(raw)) {
-    return DEFAULT_STARTER_FRIENDS.map((f) => ({
-      ...f,
-      sentDates: { ...f.sentDates },
-      receivedDates: { ...f.receivedDates },
-    }));
-  }
+  if (!Array.isArray(raw)) return [];
+  const DEMO_NAMES = ['maya', 'arjun', 'lina', 'omar'];
+  const DEMO_IDS = ['f-maya', 'f-arjun', 'f-lina', 'f-omar'];
   return raw
     .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+    .filter((item) => {
+      const name = String(item.name || '').toLowerCase();
+      const id = String(item.id || '');
+      return !DEMO_NAMES.includes(name) && !DEMO_IDS.includes(id);
+    })
     .map((item, idx) => ({
       id: typeof item.id === 'string' && item.id ? item.id : `friend-${idx + 1}`,
       name: typeof item.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 20) : `Friend ${idx + 1}`,
@@ -154,6 +235,16 @@ export function loadProgress(): PlayerProgress {
   const levelScores: Record<string, number> =
     v3.levelScores && typeof v3.levelScores === 'object'
       ? { ...(v3.levelScores as Record<string, number>) }
+      : {};
+
+  const levelBestTimes: Record<string, number> =
+    v3.levelBestTimes && typeof v3.levelBestTimes === 'object'
+      ? { ...(v3.levelBestTimes as Record<string, number>) }
+      : {};
+
+  const levelBestMoves: Record<string, number> =
+    v3.levelBestMoves && typeof v3.levelBestMoves === 'object'
+      ? { ...(v3.levelBestMoves as Record<string, number>) }
       : {};
 
   const perfectLevels: Record<string, boolean> =
@@ -224,6 +315,20 @@ export function loadProgress(): PlayerProgress {
     ? [lastClaimDate]
     : [];
 
+  const rawSpinWheel =
+    v3.spinWheel && typeof v3.spinWheel === 'object'
+      ? (v3.spinWheel as Record<string, unknown>)
+      : {};
+  const spinWheel: SpinWheelRecord = {
+    lastFreeSpinDate:
+      typeof rawSpinWheel.lastFreeSpinDate === 'string' ? rawSpinWheel.lastFreeSpinDate : null,
+    totalSpins: Math.max(0, Math.floor(Number(rawSpinWheel.totalSpins) || 0)),
+    lastOutcomeLabel:
+      typeof rawSpinWheel.lastOutcomeLabel === 'string'
+        ? rawSpinWheel.lastOutcomeLabel
+        : undefined,
+  };
+
   return {
     playerName: typeof v3.playerName === 'string' && v3.playerName.trim() ? v3.playerName : 'Guest',
     currentLevel,
@@ -232,7 +337,10 @@ export function loadProgress(): PlayerProgress {
     completedLevels,
     levelStars,
     levelScores,
+    levelBestTimes,
+    levelBestMoves,
     coins: Math.max(0, Number(legacy.coins ?? v3.coins) || 0),
+    xp: Math.max(0, Number(v3.xp) || 0),
     bestScore: Math.max(0, Number(legacy.bestScore ?? legacy.score ?? v3.bestScore) || 0),
     score: Math.max(0, Number(legacy.score) || 0),
     totalMoves: Math.max(0, Number(v3.totalMoves ?? legacy.moves) || 0),
@@ -254,6 +362,8 @@ export function loadProgress(): PlayerProgress {
       lastRewardSummary:
         typeof loginRaw.lastRewardSummary === 'string' ? loginRaw.lastRewardSummary : undefined,
     },
+    dailyMissions: normalizeDailyMissions(v3.dailyMissions, formatDateKey()),
+    spinWheel,
     friends: normalizeFriends(v3.friends),
   };
 }
@@ -267,7 +377,10 @@ export function createDefaultProgress(): PlayerProgress {
     completedLevels: {},
     levelStars: {},
     levelScores: {},
+    levelBestTimes: {},
+    levelBestMoves: {},
     coins: 0,
+    xp: 0,
     bestScore: 0,
     score: 0,
     totalMoves: 0,
@@ -283,6 +396,11 @@ export function createDefaultProgress(): PlayerProgress {
       streak: 0,
       totalClaims: 0,
       claimedDates: [],
+    },
+    dailyMissions: normalizeDailyMissions(null, formatDateKey()),
+    spinWheel: {
+      lastFreeSpinDate: null,
+      totalSpins: 0,
     },
     friends: DEFAULT_STARTER_FRIENDS.map((f) => ({
       ...f,
@@ -307,7 +425,10 @@ export function saveProgress(progress: PlayerProgress): void {
       completedLevels: progress.completedLevels,
       levelStars: progress.levelStars,
       levelScores: progress.levelScores,
+      levelBestTimes: progress.levelBestTimes,
+      levelBestMoves: progress.levelBestMoves,
       coins: progress.coins,
+      xp: progress.xp,
       bestScore: progress.bestScore,
       totalMoves: progress.totalMoves,
       lifeState: progress.lifeState,
@@ -320,6 +441,8 @@ export function saveProgress(progress: PlayerProgress): void {
       loginDate: progress.dailyLogin.lastClaimDate,
       streak: progress.dailyLogin.streak,
       loginClaims: progress.dailyLogin.totalClaims,
+      dailyMissions: progress.dailyMissions,
+      spinWheel: progress.spinWheel,
       friends: progress.friends,
     };
     localStorage.setItem(KEY_PROGRESS_V3, JSON.stringify(mergedV3));
@@ -452,9 +575,14 @@ export function sendLifeToFriend(
       ? { ...f, sentDates: { ...f.sentDates, [dateKey]: nextSent } }
       : f
   );
+  const currentMissions = normalizeDailyMissions(progress.dailyMissions, dateKey);
   const updated: PlayerProgress = {
     ...progress,
     friends: nextFriends,
+    dailyMissions: {
+      ...currentMissions,
+      livesGifted: currentMissions.livesGifted + 1,
+    },
   };
   saveProgress(updated);
   return { updated, friendName: target.name, sentToday: nextSent };
@@ -634,6 +762,8 @@ export function applyDailyLoginClaim(
     new Set([...progress.dailyLogin.claimedDates, referenceDateKey])
   ).slice(-30);
 
+  const currentMissions = normalizeDailyMissions(progress.dailyMissions, referenceDateKey);
+
   const updated: PlayerProgress = {
     ...progress,
     coins: progress.coins + reward.totalCoins,
@@ -648,10 +778,56 @@ export function applyDailyLoginClaim(
       claimedDates,
       lastRewardSummary: summary,
     },
+    dailyMissions: {
+      ...currentMissions,
+      coinsEarned: currentMissions.coinsEarned + reward.totalCoins,
+    },
   };
 
   saveProgress(updated);
   return { updated, granted: reward, newStreak: status.projectedStreak };
+}
+
+export function applyDailyMissionDelta(
+  progress: PlayerProgress,
+  delta: { levelsSolved?: number; coinsEarned?: number; livesGifted?: number },
+  dateKey: string = formatDateKey()
+): DailyMissionProgress {
+  const current = normalizeDailyMissions(progress.dailyMissions, dateKey);
+  return {
+    ...current,
+    levelsSolved: current.levelsSolved + (delta.levelsSolved || 0),
+    coinsEarned: current.coinsEarned + (delta.coinsEarned || 0),
+    livesGifted: current.livesGifted + (delta.livesGifted || 0),
+  };
+}
+
+export function claimDailyMissionReward(
+  progress: PlayerProgress,
+  missionId: DailyMissionDefinition['id'],
+  dateKey: string = formatDateKey()
+): { updated: PlayerProgress; mission: DailyMissionDefinition } | null {
+  const mission = DAILY_MISSIONS_DEFINITIONS.find((m) => m.id === missionId);
+  if (!mission) return null;
+
+  const currentMissions = normalizeDailyMissions(progress.dailyMissions, dateKey);
+  if (currentMissions.claimedMissionIds.includes(missionId)) return null;
+
+  const currentMetricVal = currentMissions[mission.metric];
+  if (currentMetricVal < mission.target) return null;
+
+  const updated: PlayerProgress = {
+    ...progress,
+    coins: progress.coins + mission.rewardCoins,
+    xp: (Number(progress.xp) || 0) + mission.rewardXp,
+    dailyMissions: {
+      ...currentMissions,
+      claimedMissionIds: [...currentMissions.claimedMissionIds, missionId],
+    },
+  };
+
+  saveProgress(updated);
+  return { updated, mission };
 }
 
 export function getMaxUnlockedLevel(progress: PlayerProgress): number {
@@ -758,4 +934,164 @@ export function getStarRankInfo(totalStars: number) {
     starsToNext: next ? Math.max(0, next.minStars - totalStars) : 0,
     progressPct,
   };
+}
+
+/* ============================================================================
+ * LUCKY PRIZE WHEEL (GIFT, COINS, BETTER LUCK)
+ * ========================================================================== */
+
+export const SPIN_COST_COINS = 50;
+
+export const SPIN_WHEEL_SEGMENTS: SpinWheelSegment[] = [
+  {
+    id: 'coins-50',
+    label: '+50 Coins',
+    shortLabel: '+50',
+    category: 'coins',
+    coins: 50,
+    lives: 0,
+    weight: 22,
+    color: '#F59E0B',
+    textColor: '#FFFDF7',
+  },
+  {
+    id: 'gift-life',
+    label: 'Gift · +1 Bonus Life',
+    shortLabel: '+1 ♥',
+    category: 'gift',
+    coins: 0,
+    lives: 1,
+    weight: 14,
+    color: '#EC4899',
+    textColor: '#FFFDF7',
+  },
+  {
+    id: 'luck-1',
+    label: 'Better Luck Next Time',
+    shortLabel: 'Better',
+    category: 'luck',
+    coins: 0,
+    lives: 0,
+    weight: 16,
+    color: '#64748B',
+    textColor: '#FFFDF7',
+  },
+  {
+    id: 'coins-120',
+    label: '+120 Coins',
+    shortLabel: '+120',
+    category: 'coins',
+    coins: 120,
+    lives: 0,
+    weight: 14,
+    color: '#10B981',
+    textColor: '#FFFDF7',
+  },
+  {
+    id: 'gift-mega',
+    label: 'Mega Gift · +75 Coins & +1 Life',
+    shortLabel: 'Mega',
+    category: 'gift',
+    coins: 75,
+    lives: 1,
+    weight: 8,
+    color: '#0EA5E9',
+    textColor: '#FFFDF7',
+  },
+  {
+    id: 'coins-250',
+    label: '+250 Coins Jackpot!',
+    shortLabel: '+250',
+    category: 'coins',
+    coins: 250,
+    lives: 0,
+    weight: 6,
+    color: '#8B5CF6',
+    textColor: '#FFFDF7',
+  },
+  {
+    id: 'luck-2',
+    label: 'Better Luck Next Time',
+    shortLabel: 'Better',
+    category: 'luck',
+    coins: 0,
+    lives: 0,
+    weight: 14,
+    color: '#475569',
+    textColor: '#FFFDF7',
+  },
+  {
+    id: 'coins-80',
+    label: '+80 Coins',
+    shortLabel: '+80',
+    category: 'coins',
+    coins: 80,
+    lives: 0,
+    weight: 16,
+    color: '#E55A3C',
+    textColor: '#FFFDF7',
+  },
+];
+
+export function canSpinFreeToday(
+  progress: PlayerProgress,
+  referenceDateKey: string = formatDateKey()
+): boolean {
+  return progress.spinWheel?.lastFreeSpinDate !== referenceDateKey;
+}
+
+export function pickWeightedSpinSegment(): { segment: SpinWheelSegment; index: number } {
+  const totalWeight = SPIN_WHEEL_SEGMENTS.reduce((sum, s) => sum + s.weight, 0);
+  let roll = Math.random() * totalWeight;
+  for (let i = 0; i < SPIN_WHEEL_SEGMENTS.length; i++) {
+    roll -= SPIN_WHEEL_SEGMENTS[i].weight;
+    if (roll <= 0) {
+      return { segment: SPIN_WHEEL_SEGMENTS[i], index: i };
+    }
+  }
+  return { segment: SPIN_WHEEL_SEGMENTS[0], index: 0 };
+}
+
+export function applySpinWheelOutcome(
+  progress: PlayerProgress,
+  segment: SpinWheelSegment,
+  usedFreeSpin: boolean,
+  referenceDateKey: string = formatDateKey()
+): PlayerProgress | null {
+  if (usedFreeSpin && !canSpinFreeToday(progress, referenceDateKey)) {
+    return null;
+  }
+  if (!usedFreeSpin && progress.coins < SPIN_COST_COINS) {
+    return null;
+  }
+
+  const spinCost = usedFreeSpin ? 0 : SPIN_COST_COINS;
+  const syncedLives = recomputeLives(progress.lifeState);
+  const nextLifeCount = syncedLives.count + segment.lives;
+  const nextLastRefillAt =
+    nextLifeCount >= MAX_STANDARD_LIVES ? 0 : syncedLives.lastRefillAt;
+
+  const currentMissions = normalizeDailyMissions(progress.dailyMissions, referenceDateKey);
+  const updated: PlayerProgress = {
+    ...progress,
+    coins: Math.max(0, progress.coins - spinCost + segment.coins),
+    lifeState: {
+      count: nextLifeCount,
+      lastRefillAt: nextLastRefillAt,
+    },
+    dailyMissions: {
+      ...currentMissions,
+      coinsEarned: currentMissions.coinsEarned + segment.coins,
+    },
+    spinWheel: {
+      lastFreeSpinDate: usedFreeSpin
+        ? referenceDateKey
+        : progress.spinWheel?.lastFreeSpinDate ?? null,
+      totalSpins: (progress.spinWheel?.totalSpins || 0) + 1,
+      lastOutcomeLabel: segment.label,
+    },
+  };
+
+  saveProgress(updated);
+  return updated;
 }

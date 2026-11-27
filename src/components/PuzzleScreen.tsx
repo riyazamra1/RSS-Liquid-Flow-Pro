@@ -20,7 +20,7 @@ import {
   Undo2,
   Users,
 } from 'lucide-react';
-import { GeneratedLevel, PlayerProgress } from '../types/game';
+import { AppThemeId, GeneratedLevel, PlayerProgress } from '../types/game';
 import {
   analyzeBoardMoves,
   canPour,
@@ -46,6 +46,7 @@ interface PuzzleScreenProps {
   vibrationIntensity: number;
   showHints: boolean;
   reduceMotion: boolean;
+  themeId: AppThemeId;
   availableLives: number;
   onExit: () => void;
   onCompleteLevel: (payload: {
@@ -56,6 +57,8 @@ interface PuzzleScreenProps {
     stars: number;
     scoreEarned: number;
     coinsEarned: number;
+    xpEarned: number;
+    timeTakenSec: number;
     isPerfect?: boolean;
   }) => void;
   onSpendLifeForRetry: (levelId: number) => boolean;
@@ -115,6 +118,7 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
   vibrationIntensity,
   showHints,
   reduceMotion,
+  themeId,
   availableLives,
   onExit,
   onCompleteLevel,
@@ -157,7 +161,10 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
   const [victoryInfo, setVictoryInfo] = useState<{
     breakdown: LevelScoreBreakdown;
     coinsEarned: number;
+    xpEarned: number;
     isPerfect: boolean;
+    timeTakenSec: number;
+    isNewBestTime: boolean;
   } | null>(null);
 
   const boardRef = useRef<HTMLDivElement | null>(null);
@@ -359,13 +366,21 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
       const won = isBoardSolved(nextBoard, levelData.capacity, targetsMap);
 
       if (won) {
+        const timeTakenSec = Math.max(1, elapsedSec);
         const remainingTimeSec = levelData.hasTimeLimit
           ? timeLeft
           : Math.max(0, levelData.timeLimit - elapsedSec);
-        const breakdown = evaluateLevelResult(nextMoves, moveBudget, remainingTimeSec);
+        const breakdown = evaluateLevelResult(
+          nextMoves,
+          moveBudget,
+          remainingTimeSec,
+          levelData.timeLimit
+        );
         const alreadyCleared = isDaily
           ? Boolean(dailyDate && progress.dailyClears[dailyDate])
           : Boolean(progress.completedLevels[String(levelId)]);
+        const prevBestTime = Number(progress.levelBestTimes?.[String(levelId)]) || 0;
+        const isNewBestTime = !isDaily && (prevBestTime === 0 || timeTakenSec < prevBestTime);
         const isPerfect = !isDaily && !resetUsed;
         const perfectBonus = isPerfect ? 25 : 0;
         const coinsEarned =
@@ -376,10 +391,18 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
             : alreadyCleared
             ? 10
             : 20 + breakdown.stars * 10) + 15 + perfectBonus;
+        const xpEarned = 15 + breakdown.stars * 15 + (isPerfect ? 15 : 0);
 
         soundFx.victory(sfxEnabled);
         haptic('success');
-        setVictoryInfo({ breakdown, coinsEarned, isPerfect });
+        setVictoryInfo({
+          breakdown,
+          coinsEarned,
+          xpEarned,
+          isPerfect,
+          timeTakenSec,
+          isNewBestTime,
+        });
         onCompleteLevel({
           levelId,
           isDaily,
@@ -388,6 +411,8 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
           stars: breakdown.stars,
           scoreEarned: breakdown.totalScore,
           coinsEarned,
+          xpEarned,
+          timeTakenSec,
           isPerfect,
         });
         return;
@@ -415,6 +440,7 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
       onCompleteLevel,
       progress.completedLevels,
       progress.dailyClears,
+      progress.levelBestTimes,
       resetUsed,
       sfxEnabled,
       timeLeft,
@@ -1876,6 +1902,7 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
           <VictoryConfetti
             active={Boolean(victoryInfo)}
             stars={victoryInfo.breakdown.stars}
+            themeId={themeId}
             reduceMotion={reduceMotion}
           />
           <div
@@ -1937,29 +1964,50 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
                   <span className="inline-flex items-center gap-1.5 font-semibold theme-ink">
                     <Star
                       className={`w-3.5 h-3.5 ${
-                        victoryInfo.breakdown.timeBalanceStar
+                        victoryInfo.breakdown.moveEfficiencyStar
                           ? 'text-[#E8A317] fill-[#F5BC38]'
                           : 'text-[#B5A996] dark:text-[#3A5B73]'
                       }`}
                     />
-                    Time Balance ({formatSeconds(victoryInfo.breakdown.remainingTimeSec)})
+                    Move Efficiency ({victoryInfo.breakdown.movesUsed}/{victoryInfo.breakdown.moveTarget} par)
                   </span>
-                  <span className="font-bold theme-ink">+{String(victoryInfo.breakdown.timeScore).padStart(5, '0')}</span>
+                  <span className="font-bold theme-ink">
+                    {victoryInfo.breakdown.moveEfficiencyStar
+                      ? `+${String(victoryInfo.breakdown.movesScore).padStart(5, '0')}`
+                      : 'Missed'}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between gap-2">
                   <span className="inline-flex items-center gap-1.5 font-semibold theme-ink">
                     <Star
                       className={`w-3.5 h-3.5 ${
-                        victoryInfo.breakdown.movesBalanceStar
+                        victoryInfo.breakdown.speedStar
                           ? 'text-[#E8A317] fill-[#F5BC38]'
                           : 'text-[#B5A996] dark:text-[#3A5B73]'
                       }`}
                     />
-                    Moves Balance ({victoryInfo.breakdown.remainingMoves} left)
+                    Speed ({formatSeconds(victoryInfo.timeTakenSec)}/{formatSeconds(victoryInfo.breakdown.speedTargetSec)})
                   </span>
-                  <span className="font-bold theme-ink">+{String(victoryInfo.breakdown.movesScore).padStart(5, '0')}</span>
+                  <span className="font-bold theme-ink">
+                    {victoryInfo.breakdown.speedStar
+                      ? `+${String(victoryInfo.breakdown.timeScore).padStart(5, '0')}`
+                      : 'Missed'}
+                  </span>
                 </div>
+
+                {!isDaily && (
+                  <div className="flex items-center justify-between gap-2 text-[11px] pt-0.5">
+                    <span className="font-semibold theme-ink-secondary">
+                      Clear Time: {formatSeconds(victoryInfo.timeTakenSec)}
+                    </span>
+                    {victoryInfo.isNewBestTime && (
+                      <span className="font-bold text-[#2E8555] dark:text-[#5EEAD4]">
+                        ★ New Fastest Time!
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <div className="pt-1.5 mt-1 border-t theme-border flex items-center justify-between font-display text-sm font-bold">
                   <span className="theme-ink">Level Score</span>
@@ -1969,9 +2017,16 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
                 </div>
               </div>
 
-              <div className="relative mt-2 inline-flex items-center gap-1 text-xs font-bold text-[#9A5F0A] dark:text-[#F5BC38] tabular-nums">
-                <Coins className="w-3.5 h-3.5 text-[#E59B14]" />
-                <span>+{victoryInfo.coinsEarned} coins earned</span>
+              <div className="relative mt-2.5 flex items-center justify-center gap-3 text-xs font-bold tabular-nums">
+                <span className="inline-flex items-center gap-1 text-[#9A5F0A] dark:text-[#F5BC38]">
+                  <Coins className="w-3.5 h-3.5 text-[#E59B14]" />
+                  <span>+{victoryInfo.coinsEarned} coins</span>
+                </span>
+                <span aria-hidden="true" className="theme-ink-muted">·</span>
+                <span className="inline-flex items-center gap-1 text-[#2E8555] dark:text-[#5EEAD4]">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>+{victoryInfo.xpEarned} XP</span>
+                </span>
               </div>
 
               {victoryInfo.isPerfect && (

@@ -56,6 +56,9 @@ export default defineConfig(() => {
             },
           ],
         },
+        workbox: {
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        },
       }),
       // Copies src/assets into dist/ so root-relative URLs still resolve in production builds.
       {
