@@ -16,9 +16,12 @@ import {
   Sparkles,
   Star,
   Target,
+  Trophy,
   Tv,
   Undo2,
   Users,
+  X,
+  Zap,
 } from 'lucide-react';
 import { AppThemeId, GeneratedLevel, PlayerProgress } from '../types/game';
 import {
@@ -165,7 +168,25 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
     isPerfect: boolean;
     timeTakenSec: number;
     isNewBestTime: boolean;
+    prevBestTime?: number;
+    timeSaved?: number;
+    isImprovement?: boolean;
   } | null>(null);
+  const [bestTimeToast, setBestTimeToast] = useState<{
+    timeSec: number;
+    prevTimeSec?: number;
+    timeSaved?: number;
+    isImprovement: boolean;
+  } | null>(null);
+
+  // Auto-dismiss in-game best time toast
+  useEffect(() => {
+    if (!bestTimeToast) return;
+    const timer = window.setTimeout(() => {
+      setBestTimeToast(null);
+    }, 4500);
+    return () => window.clearTimeout(timer);
+  }, [bestTimeToast]);
 
   const boardRef = useRef<HTMLDivElement | null>(null);
   const jarRefs = useRef<Map<number, HTMLButtonElement | null>>(new Map());
@@ -203,6 +224,7 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
     setShakeIdx(null);
     setResetUsed(false);
     setVictoryInfo(null);
+    setBestTimeToast(null);
   }, [levelData, clearPourTimers]);
 
   useEffect(() => {
@@ -380,7 +402,10 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
           ? Boolean(dailyDate && progress.dailyClears[dailyDate])
           : Boolean(progress.completedLevels[String(levelId)]);
         const prevBestTime = Number(progress.levelBestTimes?.[String(levelId)]) || 0;
-        const isNewBestTime = !isDaily && (prevBestTime === 0 || timeTakenSec < prevBestTime);
+        const isBeatenPreviousRecord = !isDaily && prevBestTime > 0 && timeTakenSec < prevBestTime;
+        const isFirstRecord = !isDaily && prevBestTime === 0;
+        const isNewBestTime = isBeatenPreviousRecord || isFirstRecord;
+        const timeSaved = isBeatenPreviousRecord ? prevBestTime - timeTakenSec : 0;
         const isPerfect = !isDaily && !resetUsed;
         const perfectBonus = isPerfect ? 25 : 0;
         const coinsEarned =
@@ -395,6 +420,23 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
 
         soundFx.victory(sfxEnabled);
         haptic('success');
+
+        if (isBeatenPreviousRecord) {
+          setBestTimeToast({
+            timeSec: timeTakenSec,
+            prevTimeSec: prevBestTime,
+            timeSaved,
+            isImprovement: true,
+          });
+          onToast(`🏆 New Best Time: ${formatSeconds(timeTakenSec)} (${timeSaved}s faster!)`);
+        } else if (isFirstRecord) {
+          setBestTimeToast({
+            timeSec: timeTakenSec,
+            isImprovement: false,
+          });
+          onToast(`⏱️ Speed Record Set: ${formatSeconds(timeTakenSec)}`);
+        }
+
         setVictoryInfo({
           breakdown,
           coinsEarned,
@@ -402,6 +444,9 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
           isPerfect,
           timeTakenSec,
           isNewBestTime,
+          prevBestTime: isBeatenPreviousRecord ? prevBestTime : undefined,
+          timeSaved: isBeatenPreviousRecord ? timeSaved : undefined,
+          isImprovement: isBeatenPreviousRecord,
         });
         onCompleteLevel({
           levelId,
@@ -438,6 +483,7 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
       levelId,
       moveBudget,
       onCompleteLevel,
+      onToast,
       progress.completedLevels,
       progress.dailyClears,
       progress.levelBestTimes,
@@ -468,6 +514,7 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
     setSelected(null);
     setHintPair(null);
     setExtraJarUnlocked(false);
+    setBestTimeToast(null);
     soundFx.tap(sfxEnabled);
   }, [clearPourTimers, levelData, sfxEnabled]);
 
@@ -989,6 +1036,55 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
 
   return (
     <div className="relative z-10 h-full w-full overflow-hidden flex flex-col items-center justify-between px-2.5 sm:px-6 py-2 sm:py-3">
+      {/* In-Game New Best Time Toast Notification */}
+      {bestTimeToast && (
+        <div
+          role="alert"
+          aria-live="polite"
+          className="fixed top-14 left-1/2 -translate-x-1/2 z-[80] w-[92%] max-w-sm pointer-events-auto animate-best-time-toast"
+        >
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#FFFBEB] via-[#FEF3C7] to-[#FDE68A] dark:from-[#241D10] dark:via-[#1D190E] dark:to-[#17140B] border-2 border-[#F59E0B] shadow-2xl shadow-amber-500/30 p-3 flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#FBBF24] via-[#F59E0B] to-[#B45309] text-white flex items-center justify-center shadow-md ring-2 ring-white/80 dark:ring-amber-400/30 shrink-0">
+                <Trophy className="w-5 h-5 fill-[#FFFBEB] text-[#78350F] drop-shadow-xs" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-display text-xs font-black text-[#78350F] dark:text-[#FDE68A] tracking-wider uppercase">
+                    {bestTimeToast.isImprovement ? 'NEW BEST TIME!' : 'SPEED RECORD SET!'}
+                  </span>
+                  {bestTimeToast.isImprovement && bestTimeToast.timeSaved !== undefined && (
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-[#10B981] text-white text-[10px] font-black shadow-xs">
+                      <Zap className="w-2.5 h-2.5 fill-current" />
+                      <span>-{bestTimeToast.timeSaved}s</span>
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] font-semibold text-[#92400E] dark:text-[#FCD34D] tabular-nums truncate mt-0.5">
+                  {bestTimeToast.isImprovement && bestTimeToast.prevTimeSec
+                    ? `Previous best: ${formatSeconds(bestTimeToast.prevTimeSec)}`
+                    : `Level ${levelId} speed record established`}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="font-display text-lg font-black text-[#92400E] dark:text-[#FDE68A] tabular-nums">
+                {formatSeconds(bestTimeToast.timeSec)}
+              </div>
+              <button
+                type="button"
+                onClick={() => setBestTimeToast(null)}
+                className="w-6 h-6 rounded-lg text-[#92400E] dark:text-[#FDE68A] hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center cursor-pointer transition-colors"
+                aria-label="Dismiss toast"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="relative z-10 w-full max-w-4xl h-full flex flex-col justify-between gap-2">
         {/* Top Compact HUD + Level Targets Panel */}
         <div className="shrink-0 space-y-1.5">
@@ -2002,8 +2098,9 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
                       Clear Time: {formatSeconds(victoryInfo.timeTakenSec)}
                     </span>
                     {victoryInfo.isNewBestTime && (
-                      <span className="font-bold text-[#2E8555] dark:text-[#5EEAD4]">
-                        ★ New Fastest Time!
+                      <span className="inline-flex items-center gap-1 font-bold text-[#D97706] dark:text-[#F5BC38]">
+                        <Trophy className="w-3 h-3 fill-current" />
+                        <span>{victoryInfo.isImprovement ? '★ New Best Time!' : '★ Speed Record Set!'}</span>
                       </span>
                     )}
                   </div>
@@ -2016,6 +2113,38 @@ export const PuzzleScreen: React.FC<PuzzleScreenProps> = ({
                   </span>
                 </div>
               </div>
+
+              {/* Celebratory Standout Record Badge */}
+              {victoryInfo.isNewBestTime && (
+                <div className="relative mt-2 p-2.5 rounded-2xl bg-gradient-to-r from-[#FFFBEB] via-[#FEF3C7] to-[#FDE68A] dark:from-[#241D10] dark:via-[#1D190E] dark:to-[#17140B] border-2 border-[#F59E0B] shadow-sm flex items-center justify-between gap-2.5 animate-unlock-pop">
+                  <div className="flex items-center gap-2 text-left min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#F59E0B] to-[#B45309] text-white flex items-center justify-center shadow-xs shrink-0">
+                      <Trophy className="w-4 h-4 fill-yellow-200 text-[#78350F]" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-display text-xs font-black text-[#78350F] dark:text-[#FDE68A] tracking-wider uppercase">
+                          {victoryInfo.isImprovement ? 'NEW FASTEST RECORD!' : 'SPEED RECORD SET!'}
+                        </span>
+                        {victoryInfo.isImprovement && victoryInfo.timeSaved !== undefined && (
+                          <span className="px-1.5 py-0.2 rounded-full bg-[#10B981] text-white text-[9px] font-black tracking-tight flex items-center gap-0.5 shadow-xs">
+                            <Zap className="w-2.5 h-2.5 fill-current" />
+                            -{victoryInfo.timeSaved}s
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-[#92400E] dark:text-[#FCD34D] font-medium truncate mt-0.5">
+                        {victoryInfo.isImprovement && victoryInfo.prevBestTime
+                          ? `Previous best: ${formatSeconds(victoryInfo.prevBestTime)} → Shaved ${victoryInfo.timeSaved}s!`
+                          : `Level ${levelId} speed benchmark established!`}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="font-display text-base font-black text-[#92400E] dark:text-[#FDE68A] tabular-nums shrink-0">
+                    {formatSeconds(victoryInfo.timeTakenSec)}
+                  </div>
+                </div>
+              )}
 
               <div className="relative mt-2.5 flex items-center justify-center gap-3 text-xs font-bold tabular-nums">
                 <span className="inline-flex items-center gap-1 text-[#9A5F0A] dark:text-[#F5BC38]">

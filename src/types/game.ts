@@ -71,6 +71,8 @@ export interface SpinWheelSegment {
 
 export interface SpinWheelRecord {
   lastFreeSpinDate: string | null; // YYYY-MM-DD
+  lastSpinDate?: string | null; // YYYY-MM-DD
+  spinsToday?: number; // 0..3 daily spins used on lastSpinDate
   totalSpins: number;
   lastOutcomeLabel?: string;
 }
@@ -83,6 +85,35 @@ export interface DailyMissionDefinition {
   target: number;
   rewardCoins: number;
   rewardXp: number;
+}
+
+export type SocialAchievementMetric =
+  | 'totalFriendsAdded'
+  | 'totalLivesSent'
+  | 'totalLivesClaimed'
+  | 'totalShares';
+
+export type SocialBadgeTier = 'bronze' | 'silver' | 'gold' | 'platinum';
+
+export interface SocialAchievementDefinition {
+  id: string;
+  title: string;
+  milestoneLabel: string;
+  description: string;
+  metric: SocialAchievementMetric;
+  target: number;
+  rewardCoins: number;
+  rewardXp: number;
+  tier: SocialBadgeTier;
+  icon: 'user-plus' | 'users' | 'crown' | 'heart' | 'send' | 'handshake' | 'gift' | 'share';
+}
+
+export interface SocialStats {
+  totalLivesSent: number;
+  totalLivesClaimed: number;
+  totalFriendsAdded: number;
+  totalShares: number;
+  claimedBadgeIds: string[];
 }
 
 export interface PlayerProgress {
@@ -111,6 +142,7 @@ export interface PlayerProgress {
   dailyMissions: DailyMissionProgress;
   spinWheel: SpinWheelRecord;
   friends: FriendEntry[];
+  socialStats: SocialStats;
 }
 
 export interface GameSettings {

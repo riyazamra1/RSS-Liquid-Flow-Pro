@@ -16,6 +16,12 @@ import { DashboardScreen } from './components/DashboardScreen';
 import { LevelDetailsModal } from './components/LevelDetailsModal';
 import { LivesModal } from './components/LivesModal';
 import { MasteryShowcaseModal } from './components/MasteryShowcaseModal';
+import {
+  OnboardingAuthResult,
+  OnboardingFlow,
+  setAuthSessionToken,
+  syncAccountLevel,
+} from './components/OnboardingFlow';
 import { OfflineIndicator } from './components/PWAInstallButton';
 import { PuzzleScreen } from './components/PuzzleScreen';
 import {
@@ -46,9 +52,12 @@ import {
   canSpinFreeToday,
   claimDailyMissionReward,
   claimLifeFromFriend,
+  claimSocialAchievementReward,
+  createDefaultProgress,
   deductOneLife,
   formatDateKey,
   getDailyLoginStatus,
+  getDailySpinStatus,
   getMaxUnlockedLevel,
   getOffsetDateKey,
   loadProgress,
@@ -56,6 +65,7 @@ import {
   MAX_FRIEND_LIVES_PER_DAY,
   MAX_STANDARD_LIVES,
   recomputeLives,
+  recordSocialShare,
   saveProgress,
   saveSettings,
   sendLifeToFriend,
@@ -79,12 +89,18 @@ export default function App() {
   const [justClaimedTier, setJustClaimedTier] = useState<CalculatedDailyReward | null>(null);
   const [livesModalOpen, setLivesModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState<boolean>(() => {
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    return !localStorage.getItem('rss-liquid-flow-auth');
+    return !localStorage.getItem('rss-liquid-flow-onboarding-done') || !localStorage.getItem('rss-liquid-flow-auth');
   });
+  const [onboardingInitialStep, setOnboardingInitialStep] = useState<'splash' | 'features' | 'auth'>('splash');
+  const [signedInEmail, setSignedInEmail] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('rss-liquid-flow-auth');
+  });
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
-  const [pendingVersion, setPendingVersion] = useState('2.5.0');
+  const [pendingVersion, setPendingVersion] = useState('2.5.4');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const todayKey = formatDateKey();
@@ -97,20 +113,26 @@ export default function App() {
     applyThemeToDocument(settings.theme);
   }, [settings.theme]);
 
-  // Startup background check for app updates
+  // Startup background check for seamless OTA updates (no reinstall needed)
   useEffect(() => {
-    const res = checkForAppUpdates();
-    if (res.hasUpdate) {
+    let cancelled = false;
+    (async () => {
+      const res = await checkForAppUpdates();
+      if (cancelled || !res.hasUpdate) return;
       if (settings.autoUpdate) {
-        // Automatically update silently in background
-        applyAppUpdate();
+        // Automatically update in-place without requiring reinstallation
+        showToast(`Updating automatically to v${res.latestVersion}…`);
+        await applyAppUpdate(res.latestVersion);
       } else {
-        // Prompt user for confirmation before install
+        // Prompt user for confirmation before updating
         setPendingVersion(res.latestVersion);
         setUpdateModalOpen(true);
       }
-    }
-  }, [settings.autoUpdate]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.autoUpdate, showToast]);
 
   useEffect(() => {
     const { userName } = initTelegramMiniApp();
@@ -148,6 +170,138 @@ export default function App() {
     saveSettings(next);
   };
 
+  const handleCheckForUpdates = useCallback(async () => {
+    const res = await checkForAppUpdates();
+    if (!res.hasUpdate) {
+      showToast(`RSS Liquid Flow v${res.currentVersion} is up to date.`);
+      return;
+    }
+    if (settings.autoUpdate) {
+      showToast(`Applying v${res.latestVersion} automatically…`);
+      await applyAppUpdate(res.latestVersion);
+    } else {
+      setPendingVersion(res.latestVersion);
+      setUpdateModalOpen(true);
+    }
+  }, [settings.autoUpdate, showToast]);
+
+  const getAccountProgressKey = (email: string) =>
+    `rss-liquid-flow-progress-user:${email.trim().toLowerCase()}`;
+
+  const saveAccountProgressBackup = useCallback((email: string | null, data: PlayerProgress) => {
+    if (typeof window === 'undefined' || !email) return;
+    try {
+      localStorage.setItem(getAccountProgressKey(email), JSON.stringify(data));
+    } catch {
+      // Ignore quota errors
+    }
+  }, []);
+
+  const loadAccountProgressBackup = useCallback((email: string): PlayerProgress | null => {
+    if (typeof window === 'undefined' || !email) return null;
+    try {
+      const raw = localStorage.getItem(getAccountProgressKey(email));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as PlayerProgress;
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const handleOnboardingComplete = useCallback(
+    (result: OnboardingAuthResult) => {
+      const normalizedEmail = result.email.trim().toLowerCase();
+
+      if (result.mode === 'register') {
+        // Brand-new registered user always starts fresh at Level 1
+        const freshProgress: PlayerProgress = {
+          ...createDefaultProgress(),
+          playerName: result.displayName,
+          currentLevel: 1,
+          bestLevel: 1,
+          levelsCleared: 0,
+        };
+        saveProgress(freshProgress);
+        saveAccountProgressBackup(normalizedEmail, freshProgress);
+        setProgress(freshProgress);
+        setActivePlayLevel(1);
+        setVisibleMapLimit(140);
+      } else {
+        // Existing user resumes their own saved progress and server-verified level
+        const accountBackup = loadAccountProgressBackup(normalizedEmail);
+        const base = accountBackup ?? createDefaultProgress();
+        const targetLevel = Math.max(1, base.currentLevel || 1, result.continueLevel || 1);
+        const completedLevels = { ...base.completedLevels };
+        const levelStars = { ...base.levelStars };
+        let levelsCleared = base.levelsCleared;
+
+        if (targetLevel > 1) {
+          levelsCleared = Math.max(levelsCleared, targetLevel - 1);
+          for (let i = 1; i < targetLevel; i++) {
+            completedLevels[String(i)] = true;
+            levelStars[String(i)] = Math.max(Number(levelStars[String(i)]) || 0, 3);
+          }
+        }
+
+        const restored: PlayerProgress = {
+          ...base,
+          playerName: result.displayName,
+          currentLevel: targetLevel,
+          bestLevel: Math.max(base.bestLevel || 1, targetLevel),
+          levelsCleared,
+          completedLevels,
+          levelStars,
+        };
+        saveProgress(restored);
+        saveAccountProgressBackup(normalizedEmail, restored);
+        setProgress(restored);
+        setActivePlayLevel(targetLevel);
+        setVisibleMapLimit(Math.max(140, Math.ceil((targetLevel + 40) / 20) * 20));
+      }
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('rss-liquid-flow-auth', normalizedEmail);
+        localStorage.setItem('rss-liquid-flow-onboarding-done', '1');
+      }
+      setSignedInEmail(normalizedEmail);
+      setShowOnboarding(false);
+      setScreen('home');
+      soundFx.reward(settings.sfx);
+      showToast(
+        result.mode === 'register'
+          ? `Welcome, ${result.displayName}! Congrats 🎉`
+          : `Welcome back, ${result.displayName}! Continuing at Level ${result.continueLevel}.`
+      );
+    },
+    [loadAccountProgressBackup, saveAccountProgressBackup, settings.sfx, showToast]
+  );
+
+  const handleSignOut = useCallback(() => {
+    if (signedInEmail) {
+      saveAccountProgressBackup(signedInEmail, progress);
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('rss-liquid-flow-auth');
+      localStorage.removeItem('rss-liquid-flow-onboarding-done');
+    }
+    setAuthSessionToken(null);
+    setSignedInEmail(null);
+    setSettingsOpen(false);
+    setAuthModalOpen(false);
+    setOnboardingInitialStep('auth');
+    setShowOnboarding(true);
+    soundFx.tap(settings.sfx);
+  }, [progress, saveAccountProgressBackup, settings.sfx, signedInEmail]);
+
+  const handleReplayIntro = useCallback(() => {
+    setSettingsOpen(false);
+    setAuthModalOpen(false);
+    setOnboardingInitialStep('splash');
+    setShowOnboarding(true);
+    soundFx.tap(settings.sfx);
+  }, [settings.sfx]);
+
   const handleAuthLoginOrRegister = (identifier: string) => {
     const isTargetUser =
       identifier.toLowerCase().includes('riyazzamra') ||
@@ -183,6 +337,7 @@ export default function App() {
 
     if (typeof window !== 'undefined') {
       localStorage.setItem('rss-liquid-flow-auth', identifier);
+      localStorage.setItem('rss-liquid-flow-onboarding-done', '1');
     }
     showToast(
       isTargetUser
@@ -219,14 +374,21 @@ export default function App() {
     (segment: SpinWheelSegment, usedFreeSpin: boolean) => {
       const updated = applySpinWheelOutcome(progress, segment, usedFreeSpin, todayKey);
       if (!updated) {
-        showToast('Not enough coins for another spin.');
+        showToast('Daily spin limit reached (3/3). Come back tomorrow!');
         return;
       }
       setProgress(updated);
+      const nextStatus = getDailySpinStatus(updated, todayKey);
       if (segment.category === 'luck') {
-        showToast('Better luck next time! Try another spin or come back tomorrow.');
+        showToast(
+          nextStatus.remainingToday > 0
+            ? `Better luck next time! ${nextStatus.remainingToday} ${nextStatus.remainingToday === 1 ? 'spin' : 'spins'} left today.`
+            : 'Better luck next time! Daily spin limit reached (3/3).'
+        );
       } else {
-        showToast(`Prize Wheel: ${segment.label}!`);
+        showToast(
+          `Prize Wheel: ${segment.label}! (${nextStatus.remainingToday}/${nextStatus.maxDailySpins} spins left today)`
+        );
       }
     },
     [progress, todayKey, showToast]
@@ -403,10 +565,17 @@ export default function App() {
           dailyMissions: nextDailyMissions,
         };
         saveProgress(updated);
+        if (typeof window !== 'undefined') {
+          const authEmail = localStorage.getItem('rss-liquid-flow-auth');
+          if (authEmail) {
+            saveAccountProgressBackup(authEmail, updated);
+            syncAccountLevel(authEmail, updated.currentLevel);
+          }
+        }
         return updated;
       });
     },
-    [todayKey]
+    [saveAccountProgressBackup, todayKey]
   );
 
   const handleClaimDailyMission = useCallback(
@@ -505,8 +674,26 @@ export default function App() {
     const url = 'https://rssapps.net/games/liquid-flow/';
     const text = `I'm on Level ${progress.currentLevel} in RSS Liquid Flow! Join me and share lives:`;
     const ok = await shareGameOrLifeRequest(text, url);
+    setProgress((prev) => recordSocialShare(prev));
     showToast(ok ? 'RSS Liquid Flow invite shared!' : 'Copy link: https://rssapps.net/games/liquid-flow/');
   }, [progress.currentLevel, showToast]);
+
+  const handleClaimSocialBadge = useCallback(
+    (badgeId: string) => {
+      const result = claimSocialAchievementReward(progress, badgeId, todayKey);
+      if (!result) {
+        soundFx.locked(settings.sfx);
+        showToast('Badge reward is not ready or already claimed.');
+        return;
+      }
+      setProgress(result.updated);
+      soundFx.reward(settings.sfx);
+      showToast(
+        `Badge unlocked: ${result.badge.title} (+${result.badge.rewardCoins} coins & +${result.badge.rewardXp} XP)!`
+      );
+    },
+    [progress, settings.sfx, showToast, todayKey]
+  );
 
   const handleNavClick = (target: AppScreen) => {
     if (target === 'play') {
@@ -519,6 +706,17 @@ export default function App() {
   };
 
   const isPlaying = screen === 'play';
+
+  if (showOnboarding) {
+    return (
+      <OnboardingFlow
+        currentSavedLevel={progress.currentLevel}
+        reduceMotion={settings.reduceMotion}
+        initialStep={onboardingInitialStep}
+        onComplete={handleOnboardingComplete}
+      />
+    );
+  }
 
   return (
     <div
@@ -750,6 +948,7 @@ export default function App() {
         {screen === 'profile' && (
           <ProfileScreen
             progress={progress}
+            signedInEmail={signedInEmail}
             onUpdateName={(name) => {
               const updated = { ...progress, playerName: name };
               setProgress(updated);
@@ -757,7 +956,15 @@ export default function App() {
               showToast(`Profile name updated to ${name}.`);
             }}
             onOpenSettings={() => setSettingsOpen(true)}
-            onOpenAuth={() => setAuthModalOpen(true)}
+            onOpenAuth={handleSignOut}
+            onSignOut={handleSignOut}
+            onClaimSocialBadge={handleClaimSocialBadge}
+            onOpenFriends={() => {
+              soundFx.tap(settings.sfx);
+              setScreen('rewards');
+              window.scrollTo({ top: 0, behavior: 'auto' });
+            }}
+            onShare={handleShare}
           />
         )}
       </main>
@@ -826,7 +1033,11 @@ export default function App() {
       <SettingsModal
         open={settingsOpen}
         settings={settings}
+        signedInEmail={signedInEmail}
         onUpdate={updateSettings}
+        onCheckForUpdates={handleCheckForUpdates}
+        onSignOut={handleSignOut}
+        onReplayIntro={handleReplayIntro}
         onClose={() => setSettingsOpen(false)}
       />
 
@@ -845,7 +1056,7 @@ export default function App() {
         version={pendingVersion}
         onConfirm={() => {
           setUpdateModalOpen(false);
-          applyAppUpdate();
+          void applyAppUpdate(pendingVersion);
         }}
         onDismiss={() => setUpdateModalOpen(false)}
       />

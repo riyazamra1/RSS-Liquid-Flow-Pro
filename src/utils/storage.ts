@@ -6,6 +6,8 @@ import {
   FriendEntry,
   GameSettings,
   PlayerProgress,
+  SocialAchievementDefinition,
+  SocialStats,
   SpinWheelRecord,
   SpinWheelSegment,
 } from '../types/game';
@@ -75,6 +77,141 @@ export const DAILY_MISSIONS_DEFINITIONS: DailyMissionDefinition[] = [
     rewardXp: 125,
   },
 ];
+
+export const SOCIAL_ACHIEVEMENTS: SocialAchievementDefinition[] = [
+  {
+    id: 'social_friends_1',
+    title: 'First Companion',
+    milestoneLabel: '1 Friend Added',
+    description: 'Add your first friend to the leaderboard.',
+    metric: 'totalFriendsAdded',
+    target: 1,
+    rewardCoins: 50,
+    rewardXp: 60,
+    tier: 'bronze',
+    icon: 'user-plus',
+  },
+  {
+    id: 'social_friends_5',
+    title: 'Social Circle',
+    milestoneLabel: '5 Friends Added',
+    description: 'Grow your community roster to 5 friends.',
+    metric: 'totalFriendsAdded',
+    target: 5,
+    rewardCoins: 150,
+    rewardXp: 180,
+    tier: 'silver',
+    icon: 'users',
+  },
+  {
+    id: 'social_friends_10',
+    title: 'Guild Captain',
+    milestoneLabel: '10 Friends Added',
+    description: 'Build an active squad of 10 friends.',
+    metric: 'totalFriendsAdded',
+    target: 10,
+    rewardCoins: 300,
+    rewardXp: 350,
+    tier: 'gold',
+    icon: 'crown',
+  },
+  {
+    id: 'social_lives_sent_5',
+    title: 'Kind Gifter',
+    milestoneLabel: '5 Lives Sent',
+    description: 'Send 5 bonus lives to help friends keep playing.',
+    metric: 'totalLivesSent',
+    target: 5,
+    rewardCoins: 75,
+    rewardXp: 90,
+    tier: 'bronze',
+    icon: 'heart',
+  },
+  {
+    id: 'social_lives_sent_25',
+    title: 'Heart Guardian',
+    milestoneLabel: '25 Lives Sent',
+    description: 'Share 25 lives across your friend list.',
+    metric: 'totalLivesSent',
+    target: 25,
+    rewardCoins: 200,
+    rewardXp: 240,
+    tier: 'silver',
+    icon: 'send',
+  },
+  {
+    id: 'social_lives_sent_100',
+    title: 'Life Benefactor',
+    milestoneLabel: '100 Lives Sent',
+    description: 'Reach 100 total lives sent to the community.',
+    metric: 'totalLivesSent',
+    target: 100,
+    rewardCoins: 500,
+    rewardXp: 600,
+    tier: 'platinum',
+    icon: 'handshake',
+  },
+  {
+    id: 'social_lives_claimed_10',
+    title: 'Team Spirit',
+    milestoneLabel: '10 Lives Claimed',
+    description: 'Claim 10 bonus lives gifted by your friends.',
+    metric: 'totalLivesClaimed',
+    target: 10,
+    rewardCoins: 120,
+    rewardXp: 150,
+    tier: 'silver',
+    icon: 'gift',
+  },
+  {
+    id: 'social_shares_3',
+    title: 'Community Herald',
+    milestoneLabel: '3 Invites Shared',
+    description: 'Invite others by sharing RSS Liquid Flow 3 times.',
+    metric: 'totalShares',
+    target: 3,
+    rewardCoins: 150,
+    rewardXp: 175,
+    tier: 'gold',
+    icon: 'share',
+  },
+];
+
+function sumFriendDateCounts(friends: FriendEntry[], field: 'sentDates' | 'receivedDates'): number {
+  return friends.reduce((sum, friend) => {
+    const map = friend[field] || {};
+    const friendTotal = Object.values(map).reduce((s, n) => s + Math.max(0, Number(n) || 0), 0);
+    return sum + friendTotal;
+  }, 0);
+}
+
+export function normalizeSocialStats(raw: unknown, friends: FriendEntry[]): SocialStats {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const derivedLivesSent = sumFriendDateCounts(friends, 'sentDates');
+  const derivedLivesClaimed = sumFriendDateCounts(friends, 'receivedDates');
+  const derivedFriendsAdded = friends.length;
+
+  return {
+    totalLivesSent: Math.max(
+      derivedLivesSent,
+      Math.max(0, Math.floor(Number(obj.totalLivesSent) || 0))
+    ),
+    totalLivesClaimed: Math.max(
+      derivedLivesClaimed,
+      Math.max(0, Math.floor(Number(obj.totalLivesClaimed) || 0))
+    ),
+    totalFriendsAdded: Math.max(
+      derivedFriendsAdded,
+      Math.max(0, Math.floor(Number(obj.totalFriendsAdded) || 0))
+    ),
+    totalShares: Math.max(0, Math.floor(Number(obj.totalShares) || 0)),
+    claimedBadgeIds: Array.isArray(obj.claimedBadgeIds)
+      ? Array.from(
+          new Set(obj.claimedBadgeIds.filter((id): id is string => typeof id === 'string'))
+        )
+      : [],
+  };
+}
 
 export const XP_PER_LEVEL = 250;
 
@@ -319,15 +456,31 @@ export function loadProgress(): PlayerProgress {
     v3.spinWheel && typeof v3.spinWheel === 'object'
       ? (v3.spinWheel as Record<string, unknown>)
       : {};
+  const lastFreeSpinDate =
+    typeof rawSpinWheel.lastFreeSpinDate === 'string' ? rawSpinWheel.lastFreeSpinDate : null;
+  const lastSpinDate =
+    typeof rawSpinWheel.lastSpinDate === 'string'
+      ? rawSpinWheel.lastSpinDate
+      : lastFreeSpinDate;
+  const rawSpinsToday = Number(rawSpinWheel.spinsToday);
+  const spinsToday = Number.isFinite(rawSpinsToday)
+    ? Math.max(0, Math.min(MAX_DAILY_SPINS, Math.floor(rawSpinsToday)))
+    : lastSpinDate
+    ? 1
+    : 0;
   const spinWheel: SpinWheelRecord = {
-    lastFreeSpinDate:
-      typeof rawSpinWheel.lastFreeSpinDate === 'string' ? rawSpinWheel.lastFreeSpinDate : null,
+    lastFreeSpinDate,
+    lastSpinDate,
+    spinsToday,
     totalSpins: Math.max(0, Math.floor(Number(rawSpinWheel.totalSpins) || 0)),
     lastOutcomeLabel:
       typeof rawSpinWheel.lastOutcomeLabel === 'string'
         ? rawSpinWheel.lastOutcomeLabel
         : undefined,
   };
+
+  const friends = normalizeFriends(v3.friends);
+  const socialStats = normalizeSocialStats(v3.socialStats, friends);
 
   return {
     playerName: typeof v3.playerName === 'string' && v3.playerName.trim() ? v3.playerName : 'Guest',
@@ -364,7 +517,8 @@ export function loadProgress(): PlayerProgress {
     },
     dailyMissions: normalizeDailyMissions(v3.dailyMissions, formatDateKey()),
     spinWheel,
-    friends: normalizeFriends(v3.friends),
+    friends,
+    socialStats,
   };
 }
 
@@ -400,6 +554,8 @@ export function createDefaultProgress(): PlayerProgress {
     dailyMissions: normalizeDailyMissions(null, formatDateKey()),
     spinWheel: {
       lastFreeSpinDate: null,
+      lastSpinDate: null,
+      spinsToday: 0,
       totalSpins: 0,
     },
     friends: DEFAULT_STARTER_FRIENDS.map((f) => ({
@@ -407,6 +563,13 @@ export function createDefaultProgress(): PlayerProgress {
       sentDates: {},
       receivedDates: {},
     })),
+    socialStats: {
+      totalLivesSent: 0,
+      totalLivesClaimed: 0,
+      totalFriendsAdded: DEFAULT_STARTER_FRIENDS.length,
+      totalShares: 0,
+      claimedBadgeIds: [],
+    },
   };
 }
 
@@ -444,6 +607,7 @@ export function saveProgress(progress: PlayerProgress): void {
       dailyMissions: progress.dailyMissions,
       spinWheel: progress.spinWheel,
       friends: progress.friends,
+      socialStats: progress.socialStats,
     };
     localStorage.setItem(KEY_PROGRESS_V3, JSON.stringify(mergedV3));
 
@@ -576,12 +740,17 @@ export function sendLifeToFriend(
       : f
   );
   const currentMissions = normalizeDailyMissions(progress.dailyMissions, dateKey);
+  const currentSocial = normalizeSocialStats(progress.socialStats, progress.friends);
   const updated: PlayerProgress = {
     ...progress,
     friends: nextFriends,
     dailyMissions: {
       ...currentMissions,
       livesGifted: currentMissions.livesGifted + 1,
+    },
+    socialStats: {
+      ...currentSocial,
+      totalLivesSent: currentSocial.totalLivesSent + 1,
     },
   };
   saveProgress(updated);
@@ -606,6 +775,7 @@ export function claimLifeFromFriend(
       ? { ...f, receivedDates: { ...f.receivedDates, [dateKey]: nextReceived } }
       : f
   );
+  const currentSocial = normalizeSocialStats(progress.socialStats, progress.friends);
 
   const updated: PlayerProgress = {
     ...progress,
@@ -614,6 +784,10 @@ export function claimLifeFromFriend(
       lastRefillAt: nextLifeCount >= MAX_STANDARD_LIVES ? 0 : livesNow.lastRefillAt,
     },
     friends: nextFriends,
+    socialStats: {
+      ...currentSocial,
+      totalLivesClaimed: currentSocial.totalLivesClaimed + 1,
+    },
   };
   saveProgress(updated);
   return { updated, friendName: target.name, receivedToday: nextReceived };
@@ -636,9 +810,15 @@ export function addFriendEntry(
     sentDates: {},
     receivedDates: {},
   };
+  const nextFriends = [...progress.friends, entry];
+  const currentSocial = normalizeSocialStats(progress.socialStats, progress.friends);
   const updated: PlayerProgress = {
     ...progress,
-    friends: [...progress.friends, entry],
+    friends: nextFriends,
+    socialStats: {
+      ...currentSocial,
+      totalFriendsAdded: Math.max(currentSocial.totalFriendsAdded + 1, nextFriends.length),
+    },
   };
   saveProgress(updated);
   return updated;
@@ -651,6 +831,80 @@ export function removeFriendEntry(progress: PlayerProgress, friendId: string): P
   };
   saveProgress(updated);
   return updated;
+}
+
+export function recordSocialShare(progress: PlayerProgress): PlayerProgress {
+  const currentSocial = normalizeSocialStats(progress.socialStats, progress.friends);
+  const updated: PlayerProgress = {
+    ...progress,
+    socialStats: {
+      ...currentSocial,
+      totalShares: currentSocial.totalShares + 1,
+    },
+  };
+  saveProgress(updated);
+  return updated;
+}
+
+export function getSocialAchievementProgress(progress: PlayerProgress) {
+  const stats = normalizeSocialStats(progress.socialStats, progress.friends);
+  const claimedSet = new Set(stats.claimedBadgeIds);
+
+  const items = SOCIAL_ACHIEVEMENTS.map((badge) => {
+    const current = stats[badge.metric];
+    const unlocked = current >= badge.target;
+    const claimed = claimedSet.has(badge.id);
+    const pct = Math.min(100, Math.round((Math.min(current, badge.target) / badge.target) * 100));
+    return {
+      badge,
+      current,
+      unlocked,
+      claimed,
+      canClaim: unlocked && !claimed,
+      pct,
+    };
+  });
+
+  const unlockedCount = items.filter((item) => item.unlocked).length;
+  const unclaimedCount = items.filter((item) => item.canClaim).length;
+
+  return {
+    stats,
+    items,
+    unlockedCount,
+    unclaimedCount,
+    totalCount: items.length,
+  };
+}
+
+export function claimSocialAchievementReward(
+  progress: PlayerProgress,
+  badgeId: string,
+  dateKey: string = formatDateKey()
+): { updated: PlayerProgress; badge: SocialAchievementDefinition } | null {
+  const badge = SOCIAL_ACHIEVEMENTS.find((b) => b.id === badgeId);
+  if (!badge) return null;
+
+  const stats = normalizeSocialStats(progress.socialStats, progress.friends);
+  if (stats.claimedBadgeIds.includes(badgeId)) return null;
+  if (stats[badge.metric] < badge.target) return null;
+
+  const currentMissions = normalizeDailyMissions(progress.dailyMissions, dateKey);
+  const updated: PlayerProgress = {
+    ...progress,
+    coins: progress.coins + badge.rewardCoins,
+    xp: (Number(progress.xp) || 0) + badge.rewardXp,
+    dailyMissions: {
+      ...currentMissions,
+      coinsEarned: currentMissions.coinsEarned + badge.rewardCoins,
+    },
+    socialStats: {
+      ...stats,
+      claimedBadgeIds: [...stats.claimedBadgeIds, badgeId],
+    },
+  };
+  saveProgress(updated);
+  return { updated, badge };
 }
 
 /* ============================================================================
@@ -937,10 +1191,11 @@ export function getStarRankInfo(totalStars: number) {
 }
 
 /* ============================================================================
- * LUCKY PRIZE WHEEL (GIFT, COINS, BETTER LUCK)
+ * LUCKY PRIZE WHEEL (GIFT, COINS, BETTER LUCK — DAILY LIMIT 3 SPINS ONLY)
  * ========================================================================== */
 
-export const SPIN_COST_COINS = 50;
+export const MAX_DAILY_SPINS = 3;
+export const SPIN_COST_COINS = 0;
 
 export const SPIN_WHEEL_SEGMENTS: SpinWheelSegment[] = [
   {
@@ -1033,11 +1288,37 @@ export const SPIN_WHEEL_SEGMENTS: SpinWheelSegment[] = [
   },
 ];
 
+export function getDailySpinStatus(
+  progress: PlayerProgress,
+  referenceDateKey: string = formatDateKey()
+) {
+  const record = progress.spinWheel;
+  const lastDate = record?.lastSpinDate ?? record?.lastFreeSpinDate ?? null;
+  const usedToday =
+    lastDate === referenceDateKey
+      ? Math.max(
+          0,
+          Math.min(
+            MAX_DAILY_SPINS,
+            typeof record?.spinsToday === 'number' ? Math.floor(record.spinsToday) : 1
+          )
+        )
+      : 0;
+  const remainingToday = Math.max(0, MAX_DAILY_SPINS - usedToday);
+
+  return {
+    usedToday,
+    remainingToday,
+    maxDailySpins: MAX_DAILY_SPINS,
+    canSpinToday: remainingToday > 0,
+  };
+}
+
 export function canSpinFreeToday(
   progress: PlayerProgress,
   referenceDateKey: string = formatDateKey()
 ): boolean {
-  return progress.spinWheel?.lastFreeSpinDate !== referenceDateKey;
+  return getDailySpinStatus(progress, referenceDateKey).canSpinToday;
 }
 
 export function pickWeightedSpinSegment(): { segment: SpinWheelSegment; index: number } {
@@ -1055,26 +1336,25 @@ export function pickWeightedSpinSegment(): { segment: SpinWheelSegment; index: n
 export function applySpinWheelOutcome(
   progress: PlayerProgress,
   segment: SpinWheelSegment,
-  usedFreeSpin: boolean,
+  _usedFreeSpin: boolean,
   referenceDateKey: string = formatDateKey()
 ): PlayerProgress | null {
-  if (usedFreeSpin && !canSpinFreeToday(progress, referenceDateKey)) {
-    return null;
-  }
-  if (!usedFreeSpin && progress.coins < SPIN_COST_COINS) {
+  const status = getDailySpinStatus(progress, referenceDateKey);
+  // Strictly enforce 3 spins per day — no extra or paid spins allowed
+  if (!status.canSpinToday) {
     return null;
   }
 
-  const spinCost = usedFreeSpin ? 0 : SPIN_COST_COINS;
   const syncedLives = recomputeLives(progress.lifeState);
   const nextLifeCount = syncedLives.count + segment.lives;
   const nextLastRefillAt =
     nextLifeCount >= MAX_STANDARD_LIVES ? 0 : syncedLives.lastRefillAt;
 
   const currentMissions = normalizeDailyMissions(progress.dailyMissions, referenceDateKey);
+  const nextSpinsToday = Math.min(MAX_DAILY_SPINS, status.usedToday + 1);
   const updated: PlayerProgress = {
     ...progress,
-    coins: Math.max(0, progress.coins - spinCost + segment.coins),
+    coins: Math.max(0, progress.coins + segment.coins),
     lifeState: {
       count: nextLifeCount,
       lastRefillAt: nextLastRefillAt,
@@ -1084,9 +1364,9 @@ export function applySpinWheelOutcome(
       coinsEarned: currentMissions.coinsEarned + segment.coins,
     },
     spinWheel: {
-      lastFreeSpinDate: usedFreeSpin
-        ? referenceDateKey
-        : progress.spinWheel?.lastFreeSpinDate ?? null,
+      lastFreeSpinDate: referenceDateKey,
+      lastSpinDate: referenceDateKey,
+      spinsToday: nextSpinsToday,
       totalSpins: (progress.spinWheel?.totalSpins || 0) + 1,
       lastOutcomeLabel: segment.label,
     },

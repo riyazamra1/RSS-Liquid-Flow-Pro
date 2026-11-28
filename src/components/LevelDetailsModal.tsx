@@ -1,5 +1,4 @@
-import React from 'react';
-import { Award, Clock, Coins, Crown, Footprints, Play, Sparkles, Star, Timer, X } from 'lucide-react';
+import { Award, Check, Clock, Coins, Crown, Footprints, Play, Sparkles, Star, Timer, Trophy, X, Zap } from 'lucide-react';
 import { PlayerProgress } from '../types/game';
 import {
   generateLevel,
@@ -146,50 +145,85 @@ export const LevelDetailsModal: React.FC<LevelDetailsModalProps> = ({
             </button>
           )}
 
-          {/* Fastest Time Speedrun Statistic */}
-          <div className="flex items-center justify-between gap-3 rounded-2xl theme-surface-muted border p-3">
-            <div className="flex items-center gap-2.5 min-w-0">
+          {/* Fastest Time Speedrun Statistic - Standout Visual Trophy Badge */}
+          {hasFastestTime ? (
+            <div className="relative overflow-hidden rounded-2xl p-3.5 border-2 border-[#F59E0B]/70 dark:border-[#E5A317]/70 bg-gradient-to-br from-[#FFFBEB] via-[#FEF3C7]/80 to-[#FDE68A]/45 dark:from-[#241D10]/95 dark:via-[#1D190E]/95 dark:to-[#17140B] shadow-sm">
+              {/* Ambient gold glow */}
               <div
-                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                  beatSpeedGoal
-                    ? 'bg-[#E2F3E8] dark:bg-[#14453B] text-[#1D633B] dark:text-[#5EEAD4]'
-                    : 'bg-[#FFF3CE] dark:bg-[#2F2A14] text-[#9A5F0A] dark:text-[#F5BC38]'
-                }`}
-              >
-                <Timer className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="font-display text-xs font-bold theme-ink">Fastest Time</div>
-                <div className="text-[11px] theme-ink-secondary truncate tabular-nums">
-                  {hasFastestTime
-                    ? beatSpeedGoal
-                      ? `Under ${formatTargetTime(speedTargetSec)} speed par`
-                      : `Beat ${formatTargetTime(speedTargetSec)} to earn 3★ speed`
-                    : isCompleted
-                    ? 'Replay level to record time'
-                    : 'Clear level to set speed record'}
+                aria-hidden="true"
+                className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-[#F59E0B]/15 blur-xl pointer-events-none"
+              />
+
+              <div className="relative flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {/* Standout 3D Golden Trophy Badge */}
+                  <div className="relative shrink-0">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#FBBF24] via-[#F59E0B] to-[#B45309] text-white flex items-center justify-center shadow-md shadow-amber-500/30 ring-2 ring-[#FEF3C7] dark:ring-[#78350F]">
+                      <Trophy className="w-6 h-6 fill-[#FFFBEB] text-[#78350F] drop-shadow-xs" />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 px-1 py-0.2 rounded-md bg-[#78350F] text-[#FDE68A] text-[9px] font-black tracking-wider uppercase leading-tight shadow-xs border border-[#FDE68A]/40">
+                      BEST
+                    </div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-display text-xs font-black text-[#78350F] dark:text-[#FDE68A] tracking-wide uppercase">
+                        Fastest Time
+                      </span>
+                      {beatSpeedGoal ? (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-[#10B981] text-white text-[10px] font-extrabold shadow-xs">
+                          <Zap className="w-2.5 h-2.5 fill-current" />
+                          <span>Speed Par Beat</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-[#F59E0B]/20 text-[#92400E] dark:text-[#FCD34D] text-[10px] font-bold">
+                          <span>Recorded</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] font-medium text-[#92400E] dark:text-[#FCD34D]/80 truncate tabular-nums mt-0.5">
+                      {beatSpeedGoal
+                        ? `-${Math.max(1, speedTargetSec - fastestTimeSec)}s faster than ${formatTargetTime(speedTargetSec)} target`
+                        : `Target: ${formatTargetTime(speedTargetSec)} (${Math.max(1, fastestTimeSec - speedTargetSec)}s to 3★)`}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <div className="font-display text-2xl font-black tabular-nums tracking-tight text-[#92400E] dark:text-[#FDE68A] leading-none drop-shadow-xs">
+                    {formatTargetTime(fastestTimeSec)}
+                  </div>
+                  <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-[#B45309] dark:text-[#F59E0B] bg-[#FDE68A]/70 dark:bg-[#78350F]/60 px-1.5 py-0.5 rounded-md">
+                    <Sparkles className="w-2.5 h-2.5 fill-current" />
+                    <span>Personal Best</span>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="text-right shrink-0">
-              <div
-                className={`font-display text-lg font-extrabold tabular-nums leading-none ${
-                  hasFastestTime
-                    ? beatSpeedGoal
-                      ? 'text-[#1D633B] dark:text-[#5EEAD4]'
-                      : 'theme-ink'
-                    : 'theme-ink-muted'
-                }`}
-              >
-                {hasFastestTime ? formatTargetTime(fastestTimeSec) : '--:--'}
-              </div>
-              {hasFastestTime && (
-                <div className="mt-0.5 text-[10px] font-semibold theme-ink-muted">
-                  Personal Best
+          ) : (
+            <div className="flex items-center justify-between gap-3 rounded-2xl theme-surface-muted border p-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-[#F4EFE6] dark:bg-[#1E293B] text-[#8C7A6B] dark:text-[#94A3B8] flex items-center justify-center shrink-0 border border-black/5 dark:border-white/5">
+                  <Timer className="w-4 h-4" />
                 </div>
-              )}
+                <div className="min-w-0">
+                  <div className="font-display text-xs font-bold theme-ink">Fastest Time</div>
+                  <div className="text-[11px] theme-ink-secondary truncate tabular-nums">
+                    {isCompleted ? 'Replay level to set speed record' : 'Clear level to record best time'}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="font-display text-base font-bold tabular-nums text-zinc-400 dark:text-zinc-500">
+                  --:--
+                </div>
+                <div className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+                  No Record Yet
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* 3-Star Mastery Targets (Move Efficiency & Speed) */}
           <div className="rounded-2xl theme-surface-muted border p-3 space-y-1.5">

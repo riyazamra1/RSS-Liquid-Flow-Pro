@@ -45,9 +45,14 @@ export const UpdateConfirmModal: React.FC<UpdateConfirmModalProps> = ({
           </div>
         </div>
 
-        <p className="text-sm theme-ink-secondary mb-6">
-          A new version of RSS Liquid Flow is available with performance improvements and new level layouts. Auto-update is currently turned off in Settings. Would you like to install now?
+        <p className="text-sm theme-ink-secondary mb-4">
+          A new version of RSS Liquid Flow (v{version}) is ready with gameplay enhancements and new level layouts. Auto-update is currently turned off in Settings.
         </p>
+
+        <div className="mb-5 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 shrink-0 text-amber-500" />
+          <span>No reinstallation required! Your level progress, coins, and records stay safe.</span>
+        </div>
 
         <div className="flex items-center gap-3">
           <button
@@ -55,7 +60,7 @@ export const UpdateConfirmModal: React.FC<UpdateConfirmModalProps> = ({
             onClick={onDismiss}
             className="flex-1 min-h-[46px] rounded-2xl theme-surface-muted border font-display text-sm font-bold theme-ink cursor-pointer hover:opacity-90"
           >
-            Not Now
+            Later
           </button>
           <button
             type="button"
@@ -63,7 +68,7 @@ export const UpdateConfirmModal: React.FC<UpdateConfirmModalProps> = ({
             className="flex-1 min-h-[46px] rounded-2xl btn-tactile-coral text-white font-display text-sm font-bold flex items-center justify-center gap-2 cursor-pointer shadow-md"
           >
             <Download className="w-4 h-4" />
-            <span>Install &amp; Restart</span>
+            <span>Update Now</span>
           </button>
         </div>
       </div>

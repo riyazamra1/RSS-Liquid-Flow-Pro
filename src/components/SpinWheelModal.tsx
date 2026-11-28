@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Coins, Gift, Heart, RotateCw, Sparkles, X } from 'lucide-react';
+import { Clock, Coins, Gift, RotateCw, Sparkles, X } from 'lucide-react';
 import { PlayerProgress, SpinWheelSegment } from '../types/game';
 import { soundFx } from '../utils/sound';
 import {
-  canSpinFreeToday,
+  getDailySpinStatus,
   pickWeightedSpinSegment,
-  SPIN_COST_COINS,
   SPIN_WHEEL_SEGMENTS,
 } from '../utils/storage';
 
@@ -66,15 +65,13 @@ export const SpinWheelModal: React.FC<SpinWheelModalProps> = ({
 
   if (!open) return null;
 
-  const freeAvailable = canSpinFreeToday(progress, referenceDateKey);
-  const canAffordPaid = progress.coins >= SPIN_COST_COINS;
-  const canSpin = !isSpinning && (freeAvailable || canAffordPaid);
+  const spinStatus = getDailySpinStatus(progress, referenceDateKey);
+  const canSpin = !isSpinning && spinStatus.canSpinToday;
 
   const sliceAngle = 360 / SPIN_WHEEL_SEGMENTS.length;
 
   const handleSpin = () => {
     if (!canSpin) return;
-    const usedFreeSpin = freeAvailable;
     const { segment, index } = pickWeightedSpinSegment();
 
     soundFx.tap(sfxEnabled);
@@ -97,7 +94,7 @@ export const SpinWheelModal: React.FC<SpinWheelModalProps> = ({
       } else {
         soundFx.reward(sfxEnabled);
       }
-      onSpinOutcome(segment, usedFreeSpin);
+      onSpinOutcome(segment, true);
       timerRef.current = null;
     }, durationMs);
   };
@@ -112,15 +109,21 @@ export const SpinWheelModal: React.FC<SpinWheelModalProps> = ({
       <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl theme-surface border p-5 sm:p-6 shadow-2xl max-h-[92dvh] overflow-y-auto">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-bold text-[#E55A3C] dark:text-[#2BD4C5] inline-flex items-center gap-1">
+            <p className="text-xs font-bold text-[#E55A3C] dark:text-[#2BD4C5] inline-flex items-center gap-1 tabular-nums">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{freeAvailable ? '1 Free Daily Spin Ready' : 'Lucky Spin Wheel'}</span>
+              <span>
+                {spinStatus.canSpinToday
+                  ? `${spinStatus.remainingToday} of ${spinStatus.maxDailySpins} Daily Spins Left`
+                  : `Daily Limit Reached (${spinStatus.usedToday}/${spinStatus.maxDailySpins})`}
+              </span>
             </p>
             <h2 id="spin-wheel-title" className="font-display text-2xl font-bold theme-ink leading-tight">
               Prize Wheel
             </h2>
             <p className="text-xs theme-ink-secondary mt-0.5">
-              Spin for coins, life gifts, or try your luck!
+              {spinStatus.canSpinToday
+                ? 'Up to 3 daily spins for coins, bonus lives, or luck.'
+                : 'No more spin chances today. Come back tomorrow for 3 fresh spins.'}
             </p>
           </div>
 
@@ -133,6 +136,31 @@ export const SpinWheelModal: React.FC<SpinWheelModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Daily Limit Progress Bar (3 Spins Only) */}
+        <div className="mt-3.5 flex items-center justify-between gap-3 rounded-2xl theme-surface-muted border px-3.5 py-2.5 text-xs tabular-nums">
+          <span className="font-semibold theme-ink">Daily Spin Allowance</span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1" aria-hidden="true">
+              {Array.from({ length: spinStatus.maxDailySpins }, (_, idx) => {
+                const available = idx < spinStatus.remainingToday;
+                return (
+                  <span
+                    key={idx}
+                    className={`w-4 h-2 rounded-full transition-colors ${
+                      available
+                        ? 'bg-[#2E8555] dark:bg-[#2BD4C5]'
+                        : 'bg-black/15 dark:bg-white/15'
+                    }`}
+                  />
+                );
+              })}
+            </div>
+            <span className="font-bold theme-ink">
+              {spinStatus.remainingToday}/{spinStatus.maxDailySpins}
+            </span>
+          </div>
         </div>
 
         {/* Interactive Wheel Container */}
@@ -237,10 +265,16 @@ export const SpinWheelModal: React.FC<SpinWheelModalProps> = ({
               type="button"
               onClick={handleSpin}
               disabled={!canSpin}
-              aria-label="Spin wheel"
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-gradient-to-b from-[#FFFDF7] to-[#F3E2BA] border-[4px] border-[#D97706] shadow-xl flex items-center justify-center font-display text-xs font-extrabold text-[#7C2D12] cursor-pointer hover:scale-105 active:scale-95 transition-transform disabled:opacity-75 disabled:cursor-not-allowed"
+              aria-label={spinStatus.canSpinToday ? 'Spin wheel' : 'No spins left today'}
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-gradient-to-b from-[#FFFDF7] to-[#F3E2BA] border-[4px] border-[#D97706] shadow-xl flex items-center justify-center font-display text-xs font-extrabold text-[#7C2D12] cursor-pointer hover:scale-105 active:scale-95 transition-transform disabled:opacity-65 disabled:cursor-not-allowed"
             >
-              {isSpinning ? <RotateCw className="w-5 h-5 animate-spin" /> : 'SPIN'}
+              {isSpinning ? (
+                <RotateCw className="w-5 h-5 animate-spin" />
+              ) : spinStatus.canSpinToday ? (
+                'SPIN'
+              ) : (
+                '0/3'
+              )}
             </button>
           </div>
         </div>
@@ -268,7 +302,9 @@ export const SpinWheelModal: React.FC<SpinWheelModalProps> = ({
             </div>
             <p className="mt-0.5 text-xs theme-ink-secondary">
               {lastResult.category === 'luck'
-                ? 'No prize this spin — give it another whirl or come back tomorrow!'
+                ? spinStatus.canSpinToday
+                  ? `No prize this spin — ${spinStatus.remainingToday} ${spinStatus.remainingToday === 1 ? 'spin' : 'spins'} remaining today.`
+                  : 'No more spins left today — come back tomorrow!'
                 : lastResult.lives > 0 && lastResult.coins > 0
                 ? 'Coins & bonus life added to your inventory!'
                 : lastResult.lives > 0
@@ -278,14 +314,16 @@ export const SpinWheelModal: React.FC<SpinWheelModalProps> = ({
           </div>
         )}
 
-        {/* Primary Action Button */}
+        {/* Primary Action Button (Strict 3/day Limit — No Paid Extra Spins) */}
         <div className="mt-4 flex flex-col gap-2">
           <button
             type="button"
             onClick={handleSpin}
             disabled={!canSpin}
-            className={`w-full min-h-[48px] rounded-2xl font-display text-base font-bold inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed ${
-              freeAvailable ? 'btn-tactile-emerald text-white' : 'btn-tactile-gold text-[#472904]'
+            className={`w-full min-h-[48px] rounded-2xl font-display text-base font-bold inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+              spinStatus.canSpinToday
+                ? 'btn-tactile-emerald text-white'
+                : 'theme-surface-muted border theme-ink-secondary'
             }`}
           >
             {isSpinning ? (
@@ -293,27 +331,26 @@ export const SpinWheelModal: React.FC<SpinWheelModalProps> = ({
                 <RotateCw className="w-4 h-4 animate-spin" />
                 <span>Spinning…</span>
               </>
-            ) : freeAvailable ? (
+            ) : spinStatus.canSpinToday ? (
               <>
                 <Gift className="w-4 h-4" />
-                <span>Free Daily Spin</span>
-              </>
-            ) : canAffordPaid ? (
-              <>
-                <Coins className="w-4 h-4" />
-                <span>Spin Again · {SPIN_COST_COINS} Coins</span>
+                <span>
+                  Spin Wheel ({spinStatus.remainingToday}/{spinStatus.maxDailySpins} Left)
+                </span>
               </>
             ) : (
               <>
-                <Heart className="w-4 h-4" />
-                <span>Need {SPIN_COST_COINS} Coins · Free Tomorrow</span>
+                <Clock className="w-4 h-4" />
+                <span>No More Spins Today · Limit 3/3</span>
               </>
             )}
           </button>
 
           <div className="flex items-center justify-between text-[11px] theme-ink-secondary px-1 tabular-nums">
             <span>Coins: {progress.coins.toLocaleString()}</span>
-            <span>Total Spins: {progress.spinWheel?.totalSpins || 0}</span>
+            <span>
+              Today: {spinStatus.usedToday}/{spinStatus.maxDailySpins} · Total: {progress.spinWheel?.totalSpins || 0}
+            </span>
           </div>
         </div>
       </div>

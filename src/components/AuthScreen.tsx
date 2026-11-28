@@ -66,7 +66,7 @@ export const AuthScreen: React.FC<Props> = ({ onAuthenticated, onPlayAsGuest }) 
           <div className="w-20 h-20 rounded-2xl bg-white border p-2 shadow-sm">
             <img src="/logo.png" alt="RSS Liquid Flow" className="w-full h-full object-contain" />
           </div>
-          <p className="mt-4 text-[11px] tracking-[.22em] font-extrabold text-sky-700">RAZEEN SECURE SOLUTION</p>
+          <p className="mt-4 text-[11px] tracking-[.22em] font-extrabold text-sky-700">RAZEEN SMART SOLUTION</p>
           <h1 className="mt-2 text-2xl font-extrabold text-slate-900">{title}</h1>
           <p className="mt-2 text-sm text-slate-500">RSS LIQUID FLOW PRO · Player account</p>
         </div>

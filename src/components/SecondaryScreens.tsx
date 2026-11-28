@@ -9,9 +9,11 @@ import {
   Gift,
   Heart,
   Lock,
+  LogOut,
   Palette,
   Play,
   Plus,
+  RefreshCw,
   Send,
   Settings,
   Share2,
@@ -36,10 +38,10 @@ import { ACHIEVEMENTS, GARDEN_PLANTS } from '../utils/levelGenerator';
 import { detectRuntimePlatform } from '../utils/platform';
 import {
   calculateStreakReward,
-  canSpinFreeToday,
   DAILY_MISSIONS_DEFINITIONS,
   DAILY_REWARD_SCHEDULE,
   getDailyLoginStatus,
+  getDailySpinStatus,
   getFriendDailyQuota,
   getOffsetDateKey,
   getStarRankInfo,
@@ -47,16 +49,17 @@ import {
   getXpLevelInfo,
   MAX_FRIEND_LIVES_PER_DAY,
   normalizeDailyMissions,
-  SPIN_COST_COINS,
   STAR_RANK_TIERS,
 } from '../utils/storage';
 import { APP_THEMES } from '../utils/themes';
+import { getCurrentAppVersion, getLastUpdateCheckTime } from '../utils/updater';
 import { PWAInstallButton } from './PWAInstallButton';
 import {
   DailyChestIllustration,
   GardenSanctuaryBanner,
   PlantIllustration,
 } from './SceneryArtwork';
+import { SocialAchievementsPanel } from './SocialAchievementsPanel';
 
 /* ============================================================================
  * GARDEN SCREEN
@@ -151,7 +154,8 @@ export const RewardsScreen: React.FC<{
   const [friendLevel, setFriendLevel] = useState(String(Math.max(1, progress.currentLevel)));
 
   const dailyStatus = getDailyLoginStatus(progress, referenceDateKey);
-  const freeSpinReady = canSpinFreeToday(progress, referenceDateKey);
+  const dailySpinStatus = getDailySpinStatus(progress, referenceDateKey);
+  const freeSpinReady = dailySpinStatus.canSpinToday;
   const dailyClearedToday = Boolean(progress.dailyClears[referenceDateKey]);
   const missionsState = normalizeDailyMissions(progress.dailyMissions, referenceDateKey);
   const xpInfo = getXpLevelInfo(progress.xp);
@@ -260,16 +264,18 @@ export const RewardsScreen: React.FC<{
               <circle cx="18" cy="18" r="4.5" fill="#FFFDF7" stroke="#B45309" strokeWidth="1.5" />
             </svg>
             {freeSpinReady && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#16A34A] border-2 border-white text-[10px] font-display font-extrabold text-white flex items-center justify-center shadow-xs">
-                1
+              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#16A34A] border-2 border-white text-[10px] font-display font-extrabold text-white flex items-center justify-center shadow-xs tabular-nums">
+                {dailySpinStatus.remainingToday}
               </span>
             )}
           </div>
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-bold tabular-nums">
-              <span className={freeSpinReady ? 'text-[#247243] dark:text-[#5EEAD4]' : 'text-[#9A5F0A] dark:text-[#F5BC38]'}>
-                {freeSpinReady ? '1 Free Daily Spin Ready' : `Next Free Spin Tomorrow · ${SPIN_COST_COINS} Coins/Spin`}
+              <span className={freeSpinReady ? 'text-[#247243] dark:text-[#5EEAD4]' : 'theme-ink-secondary'}>
+                {freeSpinReady
+                  ? `${dailySpinStatus.remainingToday} of ${dailySpinStatus.maxDailySpins} Daily Spins Left`
+                  : `Daily Limit Reached (${dailySpinStatus.usedToday}/${dailySpinStatus.maxDailySpins}) · Come Back Tomorrow`}
               </span>
               {progress.spinWheel?.totalSpins > 0 && (
                 <>
@@ -282,7 +288,7 @@ export const RewardsScreen: React.FC<{
             </div>
             <h2 className="font-display text-xl font-bold theme-ink">Lucky Prize Wheel</h2>
             <p className="text-xs sm:text-sm theme-ink-secondary">
-              Win up to +250 Coins, bonus Life Gifts, or test your luck.
+              Win up to +250 Coins, bonus Life Gifts, or test your luck (max 3 spins per day).
               {progress.spinWheel?.lastOutcomeLabel ? ` Last win: ${progress.spinWheel.lastOutcomeLabel}.` : ''}
             </p>
           </div>
@@ -292,11 +298,17 @@ export const RewardsScreen: React.FC<{
           type="button"
           onClick={onOpenWheel}
           className={`min-h-[48px] px-5 py-2.5 rounded-2xl font-display text-sm font-bold flex items-center justify-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
-            freeSpinReady ? 'btn-tactile-emerald text-white' : 'btn-tactile-gold text-[#472904]'
+            freeSpinReady
+              ? 'btn-tactile-emerald text-white'
+              : 'theme-surface-muted border theme-ink-secondary'
           }`}
         >
           <Gift className="w-4 h-4" />
-          <span>{freeSpinReady ? 'Spin Free Now' : 'Open Prize Wheel'}</span>
+          <span>
+            {freeSpinReady
+              ? `Spin Now (${dailySpinStatus.remainingToday}/${dailySpinStatus.maxDailySpins})`
+              : 'Limit Reached (3/3)'}
+          </span>
         </button>
       </section>
 
@@ -943,10 +955,25 @@ export const RewardsScreen: React.FC<{
  * ========================================================================== */
 export const ProfileScreen: React.FC<{
   progress: PlayerProgress;
+  signedInEmail?: string | null;
   onUpdateName: (name: string) => void;
   onOpenSettings: () => void;
   onOpenAuth?: () => void;
-}> = ({ progress, onUpdateName, onOpenSettings, onOpenAuth }) => {
+  onSignOut?: () => void;
+  onClaimSocialBadge: (badgeId: string) => void;
+  onOpenFriends?: () => void;
+  onShare?: () => void;
+}> = ({
+  progress,
+  signedInEmail,
+  onUpdateName,
+  onOpenSettings,
+  onOpenAuth,
+  onSignOut,
+  onClaimSocialBadge,
+  onOpenFriends,
+  onShare,
+}) => {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(progress.playerName);
   const totalStars = getTotalStars(progress);
@@ -1019,26 +1046,37 @@ export const ProfileScreen: React.FC<{
               </div>
             )}
             <p className="text-xs sm:text-sm theme-ink-secondary">
-              {platformLabel} · Progress saved locally
+              {signedInEmail ? `${signedInEmail} · ${platformLabel}` : `${platformLabel} · Progress saved locally`}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {onOpenAuth && (
+        <div className="flex flex-wrap items-center gap-2.5">
+          {onSignOut ? (
             <button
               type="button"
-              onClick={onOpenAuth}
-              className="min-h-[44px] px-4 py-2 rounded-2xl btn-tactile-coral text-white text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              onClick={onSignOut}
+              className="min-h-[44px] px-4 py-2 rounded-2xl bg-[#FFE7EC] dark:bg-[#3A1E33] border border-[#F3BCC8] dark:border-[#6A3256] text-[#B82843] dark:text-[#FF8AA1] text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap shrink-0 hover:opacity-90"
             >
-              <User className="w-4 h-4" />
-              <span>Account / Login</span>
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
             </button>
+          ) : (
+            onOpenAuth && (
+              <button
+                type="button"
+                onClick={onOpenAuth}
+                className="min-h-[44px] px-4 py-2 rounded-2xl btn-tactile-coral text-white text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer shadow-sm whitespace-nowrap shrink-0"
+              >
+                <User className="w-4 h-4" />
+                <span>Account / Login</span>
+              </button>
+            )
           )}
           <button
             type="button"
             onClick={onOpenSettings}
-            className="min-h-[44px] px-4 py-2 rounded-2xl theme-surface-muted border text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer"
+            className="min-h-[44px] px-4 py-2 rounded-2xl theme-surface-muted border text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap shrink-0"
           >
             <Settings className="w-4 h-4" />
             <span>Settings &amp; Themes</span>
@@ -1170,6 +1208,14 @@ export const ProfileScreen: React.FC<{
         </div>
       </section>
 
+      {/* Social Achievements Panel (Unlockable Community Badges) */}
+      <SocialAchievementsPanel
+        progress={progress}
+        onClaimBadge={onClaimSocialBadge}
+        onOpenFriends={onOpenFriends}
+        onShare={onShare}
+      />
+
       {/* Real Statistics Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
         <div className="rounded-2xl theme-surface-glass backdrop-blur-md border p-4">
@@ -1243,10 +1289,16 @@ export const ProfileScreen: React.FC<{
 export const SettingsModal: React.FC<{
   open: boolean;
   settings: GameSettings;
+  signedInEmail?: string | null;
   onUpdate: (next: GameSettings) => void;
+  onCheckForUpdates?: () => void;
+  onSignOut?: () => void;
+  onReplayIntro?: () => void;
   onClose: () => void;
-}> = ({ open, settings, onUpdate, onClose }) => {
+}> = ({ open, settings, signedInEmail, onUpdate, onCheckForUpdates, onSignOut, onReplayIntro, onClose }) => {
   if (!open) return null;
+  const appVersion = getCurrentAppVersion();
+  const lastCheck = getLastUpdateCheckTime();
 
   const toggle = (
     key: keyof Pick<
@@ -1432,6 +1484,46 @@ export const SettingsModal: React.FC<{
             </label>
           ))}
 
+          {/* Seamless Auto-Update ON / OFF Control (No Reinstall Required) */}
+          <div className="rounded-2xl theme-surface-muted border px-3 py-3 space-y-2.5">
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-2 text-sm font-semibold theme-ink">
+                  <RefreshCw className="w-4 h-4 text-[#2E8555] dark:text-[#5EEAD4] shrink-0" />
+                  <span>Auto-update</span>
+                </div>
+                <p className="text-[11px] theme-ink-secondary mt-0.5">
+                  {settings.autoUpdate
+                    ? 'Updates apply automatically without reinstalling.'
+                    : 'Manual mode: you will be asked before installing updates.'}
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.autoUpdate}
+                onChange={() => toggle('autoUpdate')}
+                aria-label="Toggle automatic updates"
+                className="w-5 h-5 accent-[#2E8555] cursor-pointer shrink-0"
+              />
+            </label>
+
+            <div className="pt-2 border-t theme-border flex items-center justify-between gap-2 text-[11px] theme-ink-secondary tabular-nums">
+              <span>
+                v{appVersion}
+                {lastCheck ? ` · Checked ${lastCheck}` : ''}
+              </span>
+              {onCheckForUpdates && (
+                <button
+                  type="button"
+                  onClick={onCheckForUpdates}
+                  className="min-h-[32px] px-3 py-1 rounded-lg theme-surface border text-xs font-semibold theme-ink cursor-pointer hover:opacity-90 whitespace-nowrap shrink-0"
+                >
+                  Check Now
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="flex items-center justify-between min-h-[44px] px-3 py-2 rounded-2xl theme-surface-muted border">
             <span className="text-sm font-semibold theme-ink">Game mode</span>
             <select
@@ -1447,6 +1539,40 @@ export const SettingsModal: React.FC<{
           </div>
 
           <PWAInstallButton fullWidth />
+
+          {/* Account Session Controls */}
+          {(onSignOut || onReplayIntro) && (
+            <div className="rounded-2xl theme-surface-muted border p-3 space-y-2.5">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-bold theme-ink">Account Session</span>
+                <span className="theme-ink-secondary truncate max-w-[180px]">
+                  {signedInEmail || 'Signed in'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {onReplayIntro && (
+                  <button
+                    type="button"
+                    onClick={onReplayIntro}
+                    className="min-h-[42px] px-3 rounded-xl theme-surface border text-xs font-bold theme-ink inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    <span>Replay Intro</span>
+                  </button>
+                )}
+                {onSignOut && (
+                  <button
+                    type="button"
+                    onClick={onSignOut}
+                    className="min-h-[42px] px-3 rounded-xl bg-[#FFE7EC] dark:bg-[#3A1E33] border border-[#F3BCC8] dark:border-[#6A3256] text-[#B82843] dark:text-[#FF8AA1] text-xs font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <button
